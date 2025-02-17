@@ -1,0 +1,2 @@
+# Ignore SQLite database file in a specific directory
+data/tidy_finance_python.sqlite
