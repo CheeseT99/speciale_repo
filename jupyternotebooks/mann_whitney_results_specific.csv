@@ -1,4 +1,0 @@
-Test Number,Aggressive Strategy,Conservative Strategy,U Statistic,p-value,Significant
-1,aggressive_lambda1.5_gamma0.12,conservative_lambda1.5_gamma0.5,82360.0,0.21963508902238926,False
-2,aggressive_lambda2.25_gamma0.12,conservative_lambda2.25_gamma0.12,78313.5,0.9767048338150527,False
-3,aggressive_lambda1.99_gamma0.12,conservative_lambda1.99_gamma0.12,78652.5,0.9395809544163105,False

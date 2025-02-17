@@ -1,4 +1,0 @@
-Test Number,Aggressive Strategy,Conservative Strategy,Levene Statistic,p-value,Equal Variance
-1,aggressive_lambda1.5_gamma0.12,conservative_lambda1.5_gamma0.5,8.314562038468397,0.0040396995499402,False
-2,aggressive_lambda2.25_gamma0.12,conservative_lambda2.25_gamma0.12,0.08834423570262182,0.7663709011954323,True
-3,aggressive_lambda1.99_gamma0.12,conservative_lambda1.99_gamma0.12,0.16591706464227482,0.6838765770985198,True
