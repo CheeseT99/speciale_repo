@@ -1,0 +1,6 @@
+numpy
+plotly.graph_object
+scipy
+pandas
+statsmodels.api
+ace_tools
