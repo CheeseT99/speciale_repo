@@ -2,7 +2,10 @@ import numpy as np
 from numpy import log
 from scipy.special import gammaln
 from scipy.special import multigammaln
+import numba as nb
+from numba  import njit
 
+@njit
 def gammaln_nr(z):
     """Numerical Recipes 6.1"""
     #Don't use global variables.. (They only can be changed if you recompile the function)
@@ -31,7 +34,7 @@ def gammaln_nr(z):
 
       out[i] = tmp + log(2.5066282746310005 * ser / z[i])
     return out
-
+@njit
 def gammaln_nr_p(z):
     """Numerical Recipes 6.1"""
     #Don't use global variables.. (They only can be changed if you recompile the function)
@@ -60,7 +63,7 @@ def gammaln_nr_p(z):
 
       out[i] = tmp + log(2.5066282746310005 * ser / z[i])
     return out
-
+@njit
 def multigammalnNumba(a, d):
     # Original code was from scipy.special import multigammaln
 

@@ -3,8 +3,9 @@ from scipy.special import gamma, factorial
 import numpy.linalg as LA
 import scipy.linalg as SPLA
 import cvxopt
-
+from numba import njit
 # This function returns the all combinations of exclusion or inclusion of N variables. 2^N options.
+@njit
 def constructAllCombinationsMatrix(N):
 
     TotComb = pow(2 , N)
@@ -20,6 +21,7 @@ def constructAllCombinationsMatrix(N):
 # This function returns the m row of the all combinations of exclusion or inclusion of N variables. 2^N options.
 # The m row of the matrix in the fuction constructAllCombinationsMatrix.  This is done in order to save memory space
 # when N is very big.
+@njit
 def retreiveRowFromAllCombinationsMatrix(m , N):
 
     A = np.ascontiguousarray(np.zeros((N,), dtype=int))
@@ -32,7 +34,7 @@ def retreiveRowFromAllCombinationsMatrix(m , N):
     return A
 
 # ========== End of function retreiveRowFromAllCombinationsMatrix ==========
-
+@njit
 def retreiveRowFromAllCombinationsMatrixNumba(m , N):
 
     A = np.ascontiguousarray(np.zeros((N,), dtype=np.int64))
@@ -47,6 +49,7 @@ def retreiveRowFromAllCombinationsMatrixNumba(m , N):
 # ========== End of function retreiveRowFromAllCombinationsMatrixNumba ==========
 
 # this function is similar to np.tile. Duplicating a numpy array v, k times.
+@njit
 def tileNumba(v, k):
     m=len(v)
     y = np.ascontiguousarray(np.zeros(m*k, dtype=np.int64))
@@ -59,6 +62,7 @@ def tileNumba(v, k):
 # ========== End of function tileNumba ==========
 
 # this function is similar to np.tile. Duplicating a numpy array v, k times.
+@njit
 def MeanAlongAxisNumba(a,axis):
 
     assert axis==0 or axis==1
@@ -75,7 +79,7 @@ def MeanAlongAxisNumba(a,axis):
     return mean
 
 # ========== End of function MeanAlongFirstIndex ==========
-
+@njit
 def myInverseMatrix(A, Error_str):
 
     try:
@@ -95,8 +99,7 @@ def myInverseMatrix(A, Error_str):
                 print(string + 'Failed ')
 
     return AInv
-
-
+@njit
 def printFactorsProbabilities(factorsNames, factorsProbability):
     print('Probabilities of factors')
     print(factorsNames)
@@ -108,7 +111,7 @@ def printFactorsProbabilities(factorsNames, factorsProbability):
     print(factorsProbability[I])
 
     return
-
+@njit
 def printPredictorsProbabilities(predictorsNames, predictorsProbability):
     print('Probabilities of Predictors')
     print(predictorsNames)
@@ -121,7 +124,7 @@ def printPredictorsProbabilities(predictorsNames, predictorsProbability):
 
     return
 
-
+@njit
 def printFactorsAndPredictorsProbabilities(factorsNames, factorsProbability, predictorsNames, predictorsProbability):
 
     printFactorsProbabilities(factorsNames, factorsProbability)
@@ -134,6 +137,7 @@ def printFactorsAndPredictorsProbabilities(factorsNames, factorsProbability, pre
 # A wrap to solve a quadrtic programing taken from:
 # https://scaron.info/blog/quadratic-programming-in-python.html
 # https://cvxopt.org/userguide/coneprog.html
+@njit
 def cvxopt_solve_qp(P, q, G=None, h=None, A=None, b=None):
     P = .5 * (P + P.T)  # make sure P is symmetric
     args = [cvxopt.matrix(P), cvxopt.matrix(q)]

@@ -63,7 +63,7 @@ def predictiveRegressionLogMarginalLikelihood(rr, ff, zz, keyInteractions, T0per
     predictorsInModel = constructAllCombinationsMatrix(MMax)
     nModelsMax = pow(2, MMax)
     # T0perPredictor = 10;                                                       # number of data entries per parameter.
-    logMarginalLikelihood = np.zeros((nModelsMax,), dtype=float); logMarginalLikelihood.fill(np.NINF)
+    logMarginalLikelihood = np.zeros((nModelsMax,), dtype=float); logMarginalLikelihood.fill(-np.inf)
 
     nLegitModels = 0
     T0Total = 0; T0Max = 0; T0Min = np.inf
@@ -94,7 +94,7 @@ def predictiveRegressionLogMarginalLikelihood(rr, ff, zz, keyInteractions, T0per
             (8 - 1 in predictorsIndicesIncludedInModel and 9 - 1 in predictorsIndicesIncludedInModel) or \
             (9 - 1 in predictorsIndicesIncludedInModel and 11 - 1 in predictorsIndicesIncludedInModel):
 
-            logMarginalLikelihood[model] = np.NINF
+            logMarginalLikelihood[model] = -np.inf
 
             continue
 
@@ -190,7 +190,7 @@ def predictiveRegressionLogMarginalLikelihood(rr, ff, zz, keyInteractions, T0per
     tictoc.toc()
 
     print('All combinations= %i Total number of legit models= %i %i T0 Average= %f T0 Max= %f T0 Min= %f' % \
-        (nModelsMax, np.count_nonzero(logMarginalLikelihood != np.NINF), nLegitModels , T0Total / nLegitModels, T0Max, T0Min))
+        (nModelsMax, np.count_nonzero(logMarginalLikelihood != -np.inf), nLegitModels , T0Total / nLegitModels, T0Max, T0Min))
 
 
     return [logMarginalLikelihood, predictorsInModel, predictorsNames]
@@ -211,8 +211,7 @@ if __name__ == '__main__':
         testAssets0_f20_m13  = 2
 
 
-    dataDir = "/home/lior/Characteristics/python/PostProb/Data/"
-
+    dataDir = "C:/Users/Tor Osted/OneDrive/Dokumenter/GitHub/speciale_repo/Complemetary Code Files for Submission/Data/"
     dump_file = 'predictive_regression_dump_models'+'.pkl'
 
     key_start = Start.calculate_ML

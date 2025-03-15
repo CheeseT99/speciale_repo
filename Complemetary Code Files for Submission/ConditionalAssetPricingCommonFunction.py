@@ -4,7 +4,9 @@ import sys
 from scipy.special import multigammaln
 
 from GammaFunctions import multigammalnNumba
+from numba import njit
 
+@njit
 def findOtherFactors(KMax, factorsIndicesIncludedInModel):
     otherFactors = np.zeros(KMax-len(factorsIndicesIncludedInModel), dtype=np.int64)
     nFactorsInmodel = len(factorsIndicesIncludedInModel)
@@ -21,7 +23,10 @@ def findOtherFactors(KMax, factorsIndicesIncludedInModel):
 
 # ========== End of function findOtherFactors ==========
 
+
+
 # This function calculates the log marginal likelihood given the regression estimates.
+@njit
 def calclogMarginalLikelihoods(N, K, M, T, T0, Tstar, S0, Sr, SrR, Sf0, Sf):
     key_use_Numba = 3 # 0- No Numba  1 - Numba or >1 - calculate both compare and return no numba if 0
 

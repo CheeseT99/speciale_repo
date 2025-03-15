@@ -54,7 +54,7 @@ def setUncontionalFilter(KMax, MMax):
         if np.sum(predictorsIncludedInModel) == 0:
             filter[model] = 1
         else:
-            filter[model] = np.Inf
+            filter[model] = np.inf
 
     return filter
 
@@ -112,7 +112,7 @@ def calculateFactorsAndPredictorsProbabilities(MarginalLikelihood, KMax , MMax):
 def calculateMarginalLikelihoodAndFactorsPredictorsProbabilities(logMarginalLikelihood, ntopModels, KMax, MMax,        \
                                                                  factorsNames, predictorsNames,                        \
                                                                  factorsInModel=None, predictorsInModel=None, keyPrintResults=True):
-    MarginalLikelihood = np.exp(logMarginalLikelihood - max(logMarginalLikelihood)) # [np.argwhere(logMarginalLikelihood != np.NINF)]))
+    MarginalLikelihood = np.exp(logMarginalLikelihood - max(logMarginalLikelihood)) # [np.argwhere(logMarginalLikelihood != -np.inf)]))
 
     MarginalLikelihood = MarginalLikelihood / np.sum(MarginalLikelihood)
 
@@ -264,13 +264,13 @@ def conditionalAssetPricingLogMarginalLikelihoodTau(rr, ff, zz, significantPredi
         predictorsInModel = None
 
     # Variables initialization.
-    logMarginalLikelihood  = np.zeros((nModelsMax,), dtype=float); logMarginalLikelihood.fill(np.NINF)
+    logMarginalLikelihood  = np.zeros((nModelsMax,), dtype=float); logMarginalLikelihood.fill(-np.inf)
     # Placeholder for the restricted models.
-    logMarginalLikelihoodR = np.zeros((nModelsMax,), dtype=float); logMarginalLikelihoodR.fill(np.NINF)
+    logMarginalLikelihoodR = np.zeros((nModelsMax,), dtype=float); logMarginalLikelihoodR.fill(-np.inf)
 
     nTooSmallT0  = 0
     nLegitModels = 0
-    T0Total = 0; T0Max = 0; T0Min = np.Inf
+    T0Total = 0; T0Max = 0; T0Min = np.inf
 
     AllFactorsSet    = set(np.arange(0 , KMax))
     iotaT = np.ones((T,1), dtype=float)
@@ -311,7 +311,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTau(rr, ff, zz, significantPredi
         # However in case of all factors in the test assets continue as linear predictive regression.
         # Total number of combinations is 2^MMax.
         if not (1-1 in factorsIndicesIncludedInModel) and len(factorsIndicesIncludedInModel) != 0:
-            #logMarginalLikelihood[model] = np.NINF
+            #logMarginalLikelihood[model] = -np.inf
             continue
 
         if key_Avoid_duplicate_predictors:
@@ -330,7 +330,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTau(rr, ff, zz, significantPredi
                 (8 - 1 in predictorsIndicesIncludedInModel and 9 - 1 in predictorsIndicesIncludedInModel) or \
                 (9 - 1 in predictorsIndicesIncludedInModel and 11 - 1 in predictorsIndicesIncludedInModel):
 
-                # logMarginalLikelihood[model] = np.NINF
+                # logMarginalLikelihood[model] = -np.inf
 
                 continue
 
@@ -340,7 +340,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTau(rr, ff, zz, significantPredi
                 (4 - 1 in factorsIndicesIncludedInModel and 10 - 1 in factorsIndicesIncludedInModel) or  \
                 (5 - 1 in factorsIndicesIncludedInModel and 9 - 1 in factorsIndicesIncludedInModel):
 
-                # logMarginalLikelihood[model] = np.NINF
+                # logMarginalLikelihood[model] = -np.inf
 
                 if keyPrint:
                     print('duplicate factors!!! factorsIndicesIncludedInModel= ')
@@ -361,7 +361,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTau(rr, ff, zz, significantPredi
 
         # No test assets. 2^MMax combinations.
         if N == 0:
-            #logMarginalLikelihood[model] = np.NINF
+            #logMarginalLikelihood[model] = -np.inf
             continue
 
         nLegitModels += 1
@@ -512,7 +512,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTau(rr, ff, zz, significantPredi
             # print(WRtWR[0,:])
             print(factorsIndicesIncludedInModel)
             print(predictorsIndicesIncludedInModel)
-            # logMarginalLikelihoodR[model] = np.NINF
+            # logMarginalLikelihoodR[model] = -np.inf
             string = 'Trying normal inverse ... '
             try:
                 WRtWRInv = LA.inv(WRtWR)
@@ -560,7 +560,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTau(rr, ff, zz, significantPredi
     T0Avg = T0Total / nLegitModels
 
     print('All combinations= %d Total number of legit models= %d 2ND count %d '             \
-          %(nModelsMax, np.count_nonzero(logMarginalLikelihood != np.NINF), nLegitModels))
+          %(nModelsMax, np.count_nonzero(logMarginalLikelihood != -np.inf), nLegitModels))
 
     print('# of times T0 was increased= %d T0 Average= %f T0 Max= %f T0 Min= %f' \
           %(nTooSmallT0, T0Avg, T0Max, T0Min))
@@ -750,7 +750,7 @@ class Model:
         tictoc.toc()
 
         print('All combinations= %d Total number of legit models= %d 2ND count %d ' \
-              % (pow(2, self.MMax + self.KMax), np.count_nonzero(logMarginalLikelihood != np.NINF), nLegitModels))
+              % (pow(2, self.MMax + self.KMax), np.count_nonzero(logMarginalLikelihood != -np.inf), nLegitModels))
 
         print('# of times T0 was increased= %d T0 Average= %f T0 Max= %f T0 Min= %f' \
               % (nTooSmallT0, T0Avg, T0Max, T0Min))
@@ -1655,16 +1655,16 @@ def conditionalAssetPricingLogMarginalLikelihoodTauNew(ROrig, FOrig, ZOrig, Omeg
 
     # Variables initialization.
     logMarginalLikelihood = np.zeros((nModelsMax,), dtype=np.float64)
-    logMarginalLikelihood.fill(np.NINF)
+    logMarginalLikelihood.fill(-np.inf)
     # Placeholder for the restricted models.
     logMarginalLikelihoodR = np.zeros((nModelsMax,), dtype=np.float64)
-    logMarginalLikelihoodR.fill(np.NINF)
+    logMarginalLikelihoodR.fill(-np.inf)
 
     nTooSmallT0 = 0
     nLegitModels = 0
     T0Total = 0
     T0Max = 0
-    T0Min = np.Inf
+    T0Min = np.inf
 
     AllFactorsSet = set(np.arange(0, KMax))
     iotaT = np.ones((T, 1), dtype=float)
@@ -1702,7 +1702,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTauNew(ROrig, FOrig, ZOrig, Omeg
         # However in case of all factors in the test assets continue as linear predictive regression.
         # Total number of combinations is 2^MMax.
         if not (1 - 1 in factorsIndicesIncludedInModel) and len(factorsIndicesIncludedInModel) != 0:
-            # logMarginalLikelihood[model] = np.NINF
+            # logMarginalLikelihood[model] = -np.inf
             continue
 
         if key_Avoid_duplicate_predictors:
@@ -1720,7 +1720,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTauNew(ROrig, FOrig, ZOrig, Omeg
                     (8 - 1 in predictorsIndicesIncludedInModel and 9 - 1 in predictorsIndicesIncludedInModel and 11 - 1 in predictorsIndicesIncludedInModel) or \
                     (8 - 1 in predictorsIndicesIncludedInModel and 9 - 1 in predictorsIndicesIncludedInModel) or \
                     (9 - 1 in predictorsIndicesIncludedInModel and 11 - 1 in predictorsIndicesIncludedInModel):
-                # logMarginalLikelihood[model] = np.NINF
+                # logMarginalLikelihood[model] = -np.inf
 
                 continue
 
@@ -1730,7 +1730,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTauNew(ROrig, FOrig, ZOrig, Omeg
                     (4 - 1 in factorsIndicesIncludedInModel and 10 - 1 in factorsIndicesIncludedInModel) or \
                     (5 - 1 in factorsIndicesIncludedInModel and 9 - 1 in factorsIndicesIncludedInModel):
 
-                # logMarginalLikelihood[model] = np.NINF
+                # logMarginalLikelihood[model] = -np.inf
 
                 if keyPrint:
                     print('duplicate factors!!! factorsIndicesIncludedInModel= ')
@@ -1751,7 +1751,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTauNew(ROrig, FOrig, ZOrig, Omeg
 
         # No test assets. 2^MMax combinations.
         if N == 0:
-            # logMarginalLikelihood[model] = np.NINF
+            # logMarginalLikelihood[model] = -np.inf
             continue
 
         nLegitModels += 1
@@ -1906,7 +1906,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTauNew(ROrig, FOrig, ZOrig, Omeg
             # print(WRtWR[0,:])
             print(factorsIndicesIncludedInModel)
             print(predictorsIndicesIncludedInModel)
-            # logMarginalLikelihoodR[model] = np.NINF
+            # logMarginalLikelihoodR[model] = -np.inf
             string = 'Trying normal inverse ... '
             try:
                 WRtWRInv = LA.inv(WRtWR)
@@ -1956,7 +1956,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTauNew(ROrig, FOrig, ZOrig, Omeg
     T0Avg = T0Total / nLegitModels
 
     print('All combinations= %d Total number of legit models= %d 2ND count %d ' \
-          % (nModelsMax, np.count_nonzero(logMarginalLikelihood != np.NINF), nLegitModels))
+          % (nModelsMax, np.count_nonzero(logMarginalLikelihood != -np.inf), nLegitModels))
 
     print('# of times T0 was increased= %d T0 Average= %f T0 Max= %f T0 Min= %f' \
           % (nTooSmallT0, T0Avg, T0Max, T0Min))
@@ -1989,16 +1989,16 @@ def conditionalAssetPricingLogMarginalLikelihoodTauNumba(ROrig, FOrig, ZOrig, Om
 
     # Variables initialization.
     logMarginalLikelihood = np.zeros((nModelsMax,), dtype=np.float64)
-    logMarginalLikelihood.fill(np.NINF)
+    logMarginalLikelihood.fill(-np.inf)
     # Placeholder for the restricted models.
     logMarginalLikelihoodR = np.zeros((nModelsMax,), dtype=np.float64)
-    logMarginalLikelihoodR.fill(np.NINF)
+    logMarginalLikelihoodR.fill(-np.inf)
 
     nTooSmallT0 = 0
     nLegitModels = 0
     T0Total = 0
     T0Max = 0
-    T0Min = np.Inf
+    T0Min = np.inf
     T0_div_T0_plus_T = 0
     T_div_T0_plus_T = 0
 
@@ -2025,7 +2025,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTauNumba(ROrig, FOrig, ZOrig, Om
         # However in case of all factors in the test assets continue as linear predictive regression.
         # Total number of combinations is 2^MMax.
         if not (1 - 1 in factorsIndicesIncludedInModel) and len(factorsIndicesIncludedInModel) != 0:
-    #         # logMarginalLikelihood[model] = np.NINF
+    #         # logMarginalLikelihood[model] = -np.inf
             continue
     #
         if key_Avoid_duplicate_predictors:
@@ -2226,7 +2226,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTauNumba(ROrig, FOrig, ZOrig, Om
     #         # print(WRtWR[0,:])
     #         print(factorsIndicesIncludedInModel)
     #         print(predictorsIndicesIncludedInModel)
-    #         # logMarginalLikelihoodR[model] = np.NINF
+    #         # logMarginalLikelihoodR[model] = -np.inf
     #         string = 'Trying normal inverse ... '
     #         try:
     #             WRtWRInv = LA.inv(WRtWR)
@@ -2586,7 +2586,7 @@ def conditionalAssetPricingOOSPredictionsTauNumba(ROrig, FOrig, ZOrig, OmegaOrig
     nLegitModels = 0
     T0Total = 0
     T0Max = 0
-    T0Min = np.Inf
+    T0Min = np.inf
 
     iotaT = np.ones((T, 1), dtype=np.float64)
     iotaTOOS = np.ones((TOOS, 1), dtype=np.float64)
@@ -2655,7 +2655,7 @@ def conditionalAssetPricingOOSPredictionsTauNumba(ROrig, FOrig, ZOrig, OmegaOrig
         # However in case of all factors in the test assets continue as linear predictive regression.
         # Total number of combinations is 2^MMax.
         if not (1 - 1 in factorsIndicesIncludedInModel) and len(factorsIndicesIncludedInModel) != 0:
-    #         # logMarginalLikelihood[model] = np.NINF
+    #         # logMarginalLikelihood[model] = -np.inf
             continue
     #
         if key_Avoid_duplicate_predictors:
@@ -2830,7 +2830,7 @@ def conditionalAssetPricingOOSPredictionsTauNumba(ROrig, FOrig, ZOrig, OmegaOrig
     #         # print(WRtWR[0,:])
     #         print(factorsIndicesIncludedInModel)
     #         print(predictorsIndicesIncludedInModel)
-    #         # logMarginalLikelihoodR[model] = np.NINF
+    #         # logMarginalLikelihoodR[model] = -np.inf
     #         string = 'Trying normal inverse ... '
     #         try:
     #             WRtWRInv = LA.inv(WRtWR)
@@ -2977,7 +2977,7 @@ def conditionalAssetCalculateSpreadNumba(ROrig, FOrig, ZOrig, OmegaOrig, Tau, SR
     nLegitModels = 0
     T0Total = 0
     T0Max = 0
-    T0Min = np.Inf
+    T0Min = np.inf
 
     iotaT = np.ones((T, 1), dtype=np.float64)
 
@@ -3055,7 +3055,7 @@ def conditionalAssetCalculateSpreadNumba(ROrig, FOrig, ZOrig, OmegaOrig, Tau, SR
         # However in case of all factors in the test assets continue as linear predictive regression.
         # Total number of combinations is 2^MMax.
         if not (1 - 1 in factorsIndicesIncludedInModel) and len(factorsIndicesIncludedInModel) != 0:
-    #         # logMarginalLikelihood[model] = np.NINF
+    #         # logMarginalLikelihood[model] = -np.inf
             continue
     #
         if key_Avoid_duplicate_predictors:
@@ -3381,16 +3381,21 @@ if __name__ == '__main__':
         testAssets80_f14_m13 = 1
         testAssets0_f20_m13 = 2
 
-    homeDir = "/home/lior/Characteristics/python/PostProb/"
-    dataDir = homeDir + "Data/"
+        # Get the directory containing this Python file
+    script_dir = os.path.dirname(os.path.abspath(__file__))
 
+    # Use that as your home directory
+    homeDir = script_dir
+
+    # Build subdirectories relative to the script directory
+    dataDir = os.path.join(homeDir, "Data")
     dump_file_prefix = 'conditional_dump_models_MMax_'
 
     key_start = Start.calculate_ML
     #key_start = Start.load_results_singles
     #key_start = Start.predict_OOS
     #key_start = Start.single_model_predict_OOS
-    key_start = Start.analyse_OOS
+    #key_start = Start.analyse_OOS
     #key_start = Start.summary_statistics
     #key_start = Start.variance_matrix
     #key_start = Start.factors_variance
@@ -3433,7 +3438,7 @@ if __name__ == '__main__':
         F = F.drop(columns='Unnamed: 0')
         factorsNames = F.columns.drop('Date')
         # Loading the predictors.
-        Z = pd.read_csv(dataDir + 'Z.csv')
+        Z = pd.read_csv(dataDir + r'/Z.csv')
         Z = Z.drop(columns='Unnamed: 0')
 
     elif key_DataBase == DataBase.testAssets0_f20_m13:
@@ -3450,7 +3455,7 @@ if __name__ == '__main__':
         R = pd.DataFrame({'': []})
 
         # Loading the factors.
-        F = pd.read_csv(dataDir + 'factors-20.csv')
+        F = pd.read_csv(dataDir + r'/factors-20.csv')
         F = F.drop(columns=['MKTRF','SMB*','MKT','CON','IA', 'ROE', 'ME'])
         factorsNames = F.columns.drop('Date')
 
@@ -3459,7 +3464,7 @@ if __name__ == '__main__':
             F[name] = F[name].values * 100
 
         # Loading the predictors.
-        Z = pd.read_csv(dataDir + 'Z - 197706.csv')
+        Z = pd.read_csv(dataDir + r'/Z - 197706.csv')
         Z = Z.drop(columns='Unnamed: 0')
 
         assert len(Z) == len(F)
@@ -4014,11 +4019,11 @@ if __name__ == '__main__':
                 multicolumn = multicolumn + " & "
                 if sample == sample_list[0]:
                     columns_names.append("EST")
-                    multicolumn = multicolumn + " \multicolumn{1}{c} {$" + str(sample) + "$}"
+                    multicolumn = multicolumn + r" \multicolumn{1}{c} {$" + str(sample) + "$}"
                     dump_directory = homeDir + "conditionalTauDMN0F14M13s" + str(tau_index) + "/"
                 else:
                     x = sample.split('_')            
-                    multicolumn = multicolumn + " \multicolumn{2}{c} {$\\frac{" + str(x[0]) + "}{" + str(x[1]) + "}$} "
+                    multicolumn = multicolumn + r" \multicolumn{2}{c} {$\\frac{" + str(x[0]) + "}{" + str(x[1]) + "}$} "
                     columns_names.append("EST")            
                     columns_names.append("OOS")
                     dump_directory = homeDir + "conditionalTau" + str(sample) + "NumbaDMN0F14M13s" + str(tau_index) + "/"
@@ -4702,7 +4707,7 @@ if __name__ == '__main__':
         fig, axs = plt.subplots()
         fig.set_size_inches(fig_size[0],fig_size[1])
         axs.set_xlabel('Year')
-        axs.set_ylabel('$\\frac{|V_t+\Omega_t|}{|V_t|}$')
+        axs.set_ylabel(r'$\\frac{|V_t+\Omega_t|}{|V_t|}$')
         
         axs.plot(DF['Date Plot'].values, 1/DF['VMR T'].values, 'C1', label='BMA (T)')
         axs.plot(DF['Date Plot'].values, 1/DF['VMR T_2'].values, 'C2', label='BMA $(\\frac{T}{2})$')
@@ -4886,7 +4891,7 @@ if __name__ == '__main__':
 
         factorsProbabilityMat    = np.full([len(directories_indecies) , len(factorsNames)]   , fill_value = np.nan, dtype = float)
         predictorsProbabilityMat = np.full([len(directories_indecies) , len(predictorsNames)], fill_value = np.nan, dtype = float)
-        CLMLMax = np.NINF
+        CLMLMax = -np.inf
 
         TauList = []
         ntopModels = 10; row = 0
