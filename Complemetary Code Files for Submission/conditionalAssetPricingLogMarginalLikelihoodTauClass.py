@@ -19,6 +19,7 @@ import os
 from cvxopt import matrix, solvers
 import statsmodels.api as sm
 import scipy
+from numba import njit
 
 from CommonFunctions import constructAllCombinationsMatrix, retreiveRowFromAllCombinationsMatrix, \
     retreiveRowFromAllCombinationsMatrixNumba, printFactorsAndPredictorsProbabilities, tileNumba, \
@@ -44,6 +45,7 @@ def retreiveFactorsAndPredictorsFromRowFromAllCombinationsMatrix(model, KMax, MM
 
 # ========== End of retreiveFactorsAndPredictorsFromRowFromAllCombinationsMatrix ==========
 # ======================================================================================================================
+@njit
 def setUncontionalFilter(KMax, MMax):
     nModelsMax = pow(2, KMax + MMax)
     filter = np.zeros((nModelsMax,), dtype=np.float64)
@@ -60,6 +62,7 @@ def setUncontionalFilter(KMax, MMax):
 
 # ========== End of setUncontionalFilter ==========
 # ======================================================================================================================
+@njit
 def modelsProbabilities(MarginalLikelihoodU,MarginalLikelihoodR, models_factors_included, KMax, MMax):
     nModelsMax = pow(2, KMax + MMax)
     nModels = models_factors_included.shape[0]
@@ -93,6 +96,7 @@ def modelsProbabilities(MarginalLikelihoodU,MarginalLikelihoodR, models_factors_
 
 # ========== End of setUncontionalFilter ==========
 # ======================================================================================================================
+@njit
 def calculateFactorsAndPredictorsProbabilities(MarginalLikelihood, KMax , MMax):
     factorsProbability    = np.zeros((KMax,), dtype=np.float64)
     predictorsProbability = np.zeros((MMax,), dtype=np.float64)
@@ -109,6 +113,7 @@ def calculateFactorsAndPredictorsProbabilities(MarginalLikelihood, KMax , MMax):
 
 # ========== End of calculateFactorsAndPredictorsProbabilities ==========
 # ======================================================================================================================
+@njit
 def calculateMarginalLikelihoodAndFactorsPredictorsProbabilities(logMarginalLikelihood, ntopModels, KMax, MMax,        \
                                                                  factorsNames, predictorsNames,                        \
                                                                  factorsInModel=None, predictorsInModel=None, keyPrintResults=True):
@@ -182,6 +187,7 @@ def calculateMarginalLikelihoodAndFactorsPredictorsProbabilities(logMarginalLike
 
 # ========== End of calculateMarginalLikelihoodAndFactorsPredictorsProbabilities ==========
 # ======================================================================================================================
+@njit
 def conditionalAssetPricingLogMarginalLikelihoodTau(rr, ff, zz, significantPredictors, Tau):
 
     # Constants.
@@ -708,7 +714,8 @@ class Model:
             print(self.factorsNames[5-1] + ' <--> ' + self.factorsNames[9-1])
 
 # ========== End of Constructor ==========
-
+# ======================================================================================================================
+    @njit
     def conditionalAssetPricingLogMarginalLikelihoodTau(self):
         # Constants.
         ntopModels = 10
@@ -736,7 +743,7 @@ class Model:
                 logMarginalLikelihoodR, factorsProbabilityR, predictorsProbabilityR)
 
     # ========== End of method conditionalAssetPricingLogMarginalLikelihoodTau ==========
-
+    #@njit
     def conditionalAssetPricingLogMarginalLikelihoodTauNumba(self):
         # Constants.
         ntopModels = 10
@@ -776,7 +783,7 @@ class Model:
                 predictorsProbability, T0IncreasedFraction, T0Max, T0Min, T0Avg, T0_div_T0_plus_TAvg, T_div_T0_plus_TAvg,\
                 logMarginalLikelihoodR, factorsProbabilityR, predictorsProbabilityR)
     # ========== End of method conditionalAssetPricingLogMarginalLikelihoodTauNumba ==========
-
+   # @njit
     def conditionalAssetPricingOOSTauNumba(self, models_probabilities, nModelsInPrediction):
         # Constants.
 
@@ -809,7 +816,7 @@ class Model:
                     cumulative_probability)
 
     # ========== End of method conditionalAssetPricingOOSTauNumba ==========
-
+    #@njit
     def conditionalAssetPricingSingleOOSTauNumba(self, models_probabilities, single_top_model):
         # Constants.
         nModelsInPrediction = -single_top_model
@@ -848,7 +855,7 @@ class Model:
                     cumulative_probability)
 
     # ========== End of method conditionalAssetPricingSingleOOSTauNumba ==========
-    
+   # @njit
     def conditionalAssetCalculateSpread(self, models_probabilities, nModelsInPrediction):
         # Constants.
 
@@ -905,6 +912,7 @@ class Model:
 #                                                            gamma=gamma, only_top_model=True, dump_directory=dump_directory, num_top=top)
 
     # In this function the arguments covariance_matrix_in_sample and covariance_matrix_OOS are the V_t components in eq. 5 
+    #@njit
     def AnalyseInSampleAndOOSPortfolioReturns(self, \
                                         returns_in_sample, returns_square_in_sample, returns_interactions_in_sample, \
                                         covariance_matrix_in_sample, covariance_matrix_no_ER_in_sample, \
@@ -1352,6 +1360,7 @@ class Model:
 
     # This method recevies the MKT returns, facotrs returns, tau and KMax and calculartes T0.
     @staticmethod
+    @njit
     def calculateT0(R_MKT, F, tau, KMax):
             SRMKT = np.mean(R_MKT)/np.std(R_MKT)
             F_mean = np.mean(F, axis=0)
@@ -1369,12 +1378,14 @@ class Model:
     
     # This method recevies the mothly returns and returns the annual Sharpe ratio.
     @staticmethod
+    @njit
     def SharpeRatio(r):        
         return np.mean(r)/np.sqrt(np.cov(r,rowvar=False, bias=False))*np.sqrt(12)
 
     # ========== End of Method SharpeRatio ==========
 
     @staticmethod
+    @njit
     def unconditional_model_portfolio_returns(r_observed, r_estimated):
         N = r_estimated.shape[1]
         assert r_estimated.shape[1] == r_observed.shape[1]
@@ -1394,6 +1405,7 @@ class Model:
     # ========== End of method unconditional_model_portfolio_returns ==========
 
     @staticmethod
+    @njit
     def GMVP_unconditional_model_portfolio_returns(r_observed, r_estimated):
         N = r_estimated.shape[1]
         assert r_estimated.shape[1] == r_observed.shape[1]
@@ -1415,6 +1427,7 @@ class Model:
 
 
     @staticmethod
+    @njit
     def BMA_diagonal_cov_portfolio_returns(r_observed, r_estimated, r_square_estimated, variance_matrix):
         T = r_observed.shape[0]
         N = r_observed.shape[1]
@@ -1476,6 +1489,7 @@ class Model:
     # ========== End of method BMA_diagonal_cov_portfolio_returns ==========
 
     @staticmethod
+    @njit
     def diagonal_cov_regulation_T_portfolio_returns(r_observed, r_estimated, r_square_estimated, variance_matrix, gamma):
         T = r_observed.shape[0]
         N = r_observed.shape[1]
@@ -1523,6 +1537,7 @@ class Model:
 
     # ========== End of method diagonal_cov_regulation_T_portfolio_returns ==========   
     @staticmethod
+    @njit
     def BMA_full_cov_portfolio_returns(r_observed, r_estimated, r_square_estimated, \
                                         returns_interactions_estimated, variance_matrix):
         T = r_observed.shape[0]
@@ -1593,6 +1608,7 @@ class Model:
     # ========== End of method BMA_full_cov_portfolio_returns ==========
 
     @staticmethod
+    @njit
     def full_cov_regulation_T_portfolio_returns(r_observed, r_estimated, r_square_estimated, \
                                                 returns_interactions_estimated, variance_matrix, gamma):
         T = r_observed.shape[0]
@@ -1633,6 +1649,7 @@ class Model:
 # ========== End of Model Class ==========
 
 # ======================================================================================================================
+@njit
 def conditionalAssetPricingLogMarginalLikelihoodTauNew(ROrig, FOrig, ZOrig, OmegaOrig, Tau, SR2Mkt):
 
     print("calculating both unrestricted and restricted models")
@@ -1965,7 +1982,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTauNew(ROrig, FOrig, ZOrig, Omeg
 
 # ========== End of function conditionalAssetPricingLogMarginalLikelihoodTauNew ==========
 # ======================================================================================================================
-
+@njit
 def conditionalAssetPricingLogMarginalLikelihoodTauNumba(ROrig, FOrig, ZOrig, OmegaOrig, Tau, SR2Mkt):
 
     key_Avoid_duplicate_predictors = 1
@@ -2282,7 +2299,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTauNumba(ROrig, FOrig, ZOrig, Om
         T0_div_T0_plus_TAvg, T_div_T0_plus_TAvg, nLegitModels, nTooSmallT0)
 
 # ========== End of function conditionalAssetPricingLogMarginalLikelihoodTauNumba ==========
-
+@njit
 def calculatePredictions(Z, T, AfTilda, phiTilda, phiTildaR, \
                          KMax, K, M , TEstimation, TEstimationStar, \
                          Sr, SrR, Sf, XtXInv, WtWInv, WRtWRInv, \
@@ -2526,7 +2543,7 @@ def calculatePredictions(Z, T, AfTilda, phiTilda, phiTildaR, \
             Returns_terms_weighted, Returns_terms_square_weighted, Returns_terms_cumulative_probability)
 
 # ========== End of function calculatePredictions ==========
-
+@njit
 def conditionalAssetPricingOOSPredictionsTauNumba(ROrig, FOrig, ZOrig, OmegaOrig, Tau, SR2Mkt, ZTest, \
                                                   models_probabilities, nModelsInPrediction):
 
@@ -2901,7 +2918,7 @@ def conditionalAssetPricingOOSPredictionsTauNumba(ROrig, FOrig, ZOrig, OmegaOrig
             T0IncreasedFraction, T0Max, T0Min, T0Avg, nLegitModels, nTooSmallT0, cumulative_probability)
 
 # ========== End of function conditionalAssetPricingOOSPredictionsTauNumba ==========
-
+@njit
 def conditionalAssetCalculateSpreadNumba(ROrig, FOrig, ZOrig, OmegaOrig, Tau, SR2Mkt, 
                                             RTest, FTest, ZTest, \
                                             models_probabilities, nModelsInPrediction):
