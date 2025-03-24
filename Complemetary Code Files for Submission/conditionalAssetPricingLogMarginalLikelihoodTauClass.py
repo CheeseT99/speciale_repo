@@ -69,7 +69,7 @@ def modelsProbabilities(MarginalLikelihoodU,MarginalLikelihoodR, models_factors_
     assert KMax == models_factors_included.shape[1]
     # The columns are unrestricted conditional, unrestricted unconditional, restricted conditional, restricted unconditional.
     modelsProbabilities = np.zeros((nModels,4),np.float64)
-    modelsProbabilitiesCounter = np.zeros((nModels,4),np.int64)
+    modelsProbabilitiesCounter = np.zeros((nModels,4),int64)
 
     for model in np.arange(0, nModelsMax):
         factorsIncludedInModel, predictorsIncludedInModel = \
@@ -100,7 +100,7 @@ def modelsProbabilities(MarginalLikelihoodU,MarginalLikelihoodR, models_factors_
 def calculateFactorsAndPredictorsProbabilities(MarginalLikelihood, KMax , MMax):
     factorsProbability    = np.zeros((KMax,), dtype=np.float64)
     predictorsProbability = np.zeros((MMax,), dtype=np.float64)
-    combinationsRowFromMatrix = np.zeros((KMax + MMax,) , dtype=np.int64)
+    combinationsRowFromMatrix = np.zeros((KMax + MMax,) , dtype=int64)
 
     nModelsMax = pow(2, KMax+MMax)
     for model in np.arange(0, nModelsMax):
@@ -675,7 +675,7 @@ class Model:
             self.REstimation = np.ascontiguousarray(copy.deepcopy( \
                         rr.loc[self.keyConditionalCAPM : indexEndOfEstimation, self.testAssetsPortfoliosNames].values))
             self.RTest       = np.ascontiguousarray(copy.deepcopy( \
-                        rr.loc[indexEndOfEstimation + 1 :, testAssetsPortfoliosNames].values))
+                        rr.loc[indexEndOfEstimation + 1 :,self.testAssetsPortfoliosNames].values))
         else:
             self.REstimation = np.zeros((0,0),dtype=np.float64)
             self.RTest = np.zeros((0,0),dtype=np.float64)
@@ -2842,25 +2842,7 @@ def conditionalAssetPricingOOSPredictionsTauNumba(ROrig, FOrig, ZOrig, OmegaOrig
         WRtWR = np.transpose(WR) @ WR
     #     try:
         WRtWRInv = LA.pinv(WRtWR)
-    #     except np.linalg.LinAlgError as e:
-    #         print('Error %s in model number %i' % (e, model))
-    #         # print(WRtWR[0,:])
-    #         print(factorsIndicesIncludedInModel)
-    #         print(predictorsIndicesIncludedInModel)
-    #         # logMarginalLikelihoodR[model] = -np.inf
-    #         string = 'Trying normal inverse ... '
-    #         try:
-    #             WRtWRInv = LA.inv(WRtWR)
-    #             print(string + 'LA.inv worked')
-    #         except:
-    #             string += 'Failed trying scipy pinvh'
-    #             try:
-    #                 WRtWRInv = SPLA.pinvh(WRtWR)
-    #                 print(string + 'SPLA.pinvh worked')
-    #             except:
-    #                 print(string + 'Failed assaining NINF')
-    #                 continue
-    #
+
         phiTildaR = T / Tstar * WRtWRInv @ (np.transpose(WR) @ R + T0 / T * WRtWR @ phi0R)
 
         SrR = S0 + np.transpose(R - WR @ phiTildaR) @ (R - WR @ phiTildaR) + \
@@ -3389,7 +3371,7 @@ if __name__ == '__main__':
         summary_statistics = 8
         variance_matrix    = 9
         factors_variance   = 10
-        factors_inclusion  = 11
+        factors_inclusion  = 17
         analyse_OOS_performance = 12
         calculate_spread   = 13
         calculate_spread_post_processing = 14
@@ -3408,8 +3390,8 @@ if __name__ == '__main__':
     dataDir = os.path.join(homeDir, "Data")
     dump_file_prefix = 'conditional_dump_models_MMax_'
 
-    key_start = Start.calculate_ML
-    #key_start = Start.load_results_singles
+    #key_start = Start.calculate_ML
+    key_start = Start.load_results_singles
     #key_start = Start.predict_OOS
     #key_start = Start.single_model_predict_OOS
     #key_start = Start.analyse_OOS
@@ -4262,8 +4244,8 @@ if __name__ == '__main__':
         # Equal to
         #cum_return = np.cumsum(np.log(1 + returns.loc[start_index:][models_list].values/100), axis=0)
         maximum_drawdown = np.zeros((len(models_list),), dtype=np.float64)
-        maximum_drawdown_start = np.zeros((len(models_list),), dtype=np.int64)
-        maximum_drawdown_end = np.zeros((len(models_list),), dtype=np.int64)
+        maximum_drawdown_start = np.zeros((len(models_list),), dtype=int64)
+        maximum_drawdown_end = np.zeros((len(models_list),), dtype=int64)
         for m in np.arange(0, len(models_list)):
             for i in np.arange(0, len(cum_return)-1):
                 for ii in np.arange(i + 1, len(cum_return)):
@@ -4912,7 +4894,7 @@ if __name__ == '__main__':
 
         TauList = []
         ntopModels = 10; row = 0
-        filter = np.array([], dtype=np.int)
+        filter = np.array([], dtype=int)
 
         for dir_index in directories_indecies:
             directory_name = directory_name_prefix + str(dir_index)
@@ -4987,7 +4969,7 @@ if __name__ == '__main__':
                 if len(filter) != nModelsMax:
                     UnconditionalMispricingProbList = []
                     filter = setUncontionalFilter(KMax, MMax)
-                    # filter = np.zeros((nModelsMax,), dtype=np.int)
+                    # filter = np.zeros((nModelsMax,), dtype=int)
                     # for model in np.arange(0, nModelsMax):
                     #     factorsIncludedInModel, predictorsIncludedInModel = \
                     #         retreiveFactorsAndPredictorsFromRowFromAllCombinationsMatrix(model, KMax, MMax)

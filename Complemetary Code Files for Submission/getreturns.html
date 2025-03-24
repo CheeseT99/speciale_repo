@@ -1,0 +1,2405 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.4.550">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>getreturns</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script><script src="getreturns_files/libs/clipboard/clipboard.min.js"></script>
+<script src="getreturns_files/libs/quarto-html/quarto.js"></script>
+<script src="getreturns_files/libs/quarto-html/popper.min.js"></script>
+<script src="getreturns_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="getreturns_files/libs/quarto-html/anchor.min.js"></script>
+<link href="getreturns_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="getreturns_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="getreturns_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="getreturns_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="getreturns_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" integrity="sha512-c3Nl8+7g4LMSTdrm621y7kf9v3SDPnhxLNhcjFJbKECVnmZHTdo+IRO05sNLTH/D3vA6u1X32ehoLC7WFVdheg==" crossorigin="anonymous"></script>
+
+<script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
+
+
+</head>
+
+<body class="fullcontent">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+
+
+
+<div id="cell-0" class="cell" data-execution_count="96">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> openpyxl</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> conditionalAssetPricingLogMarginalLikelihoodTauClass <span class="im">import</span> Model</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co"># === Step 1: Setup ===</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>homeDir <span class="op">=</span> <span class="vs">r'C:\Users\Tor Osted\OneDrive\Dokumenter\GitHub\speciale_repo\Complemetary Code Files for Submission\\'</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>dataDir <span class="op">=</span> homeDir <span class="op">+</span> <span class="vs">r'Data\\'</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>directory_name_prefix <span class="op">=</span> homeDir <span class="op">+</span> <span class="st">'conditionalTauDMN0F14M13s'</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="co"># === Step 2: Choose number of predictors to use ===</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>n_predictors_to_use <span class="op">=</span> <span class="dv">2</span>  <span class="co"># 🔧 Set this to anything between 1 and 13</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="dv">1</span> <span class="op">&lt;=</span> n_predictors_to_use <span class="op">&lt;=</span> <span class="dv">13</span>, <span class="st">"You must choose between 1 and 13 predictors"</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="co"># === Step 3: Load test assets (returns) ===</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>returns <span class="op">=</span> pd.read_excel(dataDir <span class="op">+</span> <span class="st">'Returns.xlsx'</span>, sheet_name<span class="op">=</span><span class="st">"Industry_returns"</span>)</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>returns <span class="op">=</span> returns.iloc[:<span class="op">-</span><span class="dv">1</span>]  <span class="co"># remove first row</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>returns <span class="op">=</span> returns.drop(columns<span class="op">=</span>[<span class="st">'Grand Total'</span>])  <span class="co"># remove Date column</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="co"># === Step 4: Load and clean factors ===</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>factors <span class="op">=</span> pd.read_csv(dataDir <span class="op">+</span> <span class="st">'factors-20.csv'</span>)</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>factors <span class="op">=</span> factors.drop(columns<span class="op">=</span>[<span class="st">'MKTRF'</span>,<span class="st">'SMB*'</span>,<span class="st">'MKT'</span>,<span class="st">'CON'</span>,<span class="st">'IA'</span>, <span class="st">'ROE'</span>, <span class="st">'ME'</span>])  <span class="co"># remove redundant/duplicated</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>factorsNames <span class="op">=</span> factors.columns.drop(<span class="st">'Date'</span>)</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert to percent returns</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> name <span class="kw">in</span> factorsNames:</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>    factors[name] <span class="op">=</span> factors[name] <span class="op">*</span> <span class="dv">100</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div id="cell-1" class="cell" data-execution_count="97">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>returns <span class="op">=</span> pd.read_csv(dataDir <span class="op">+</span> <span class="st">'Simulated_Returns_Data.csv'</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div id="cell-2" class="cell" data-execution_count="98">
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>returns</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="98">
+<div>
+<div>
+
+
+<table class="dataframe table table-sm table-striped small" data-quarto-postprocess="true" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">Date</th>
+<th data-quarto-table-cell-role="th">SPY</th>
+<th data-quarto-table-cell-role="th">30Y_Treasury</th>
+<th data-quarto-table-cell-role="th">Gold</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">0</td>
+<td>1997-01-01</td>
+<td>0.019901</td>
+<td>0.000852</td>
+<td>0.024431</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">1</td>
+<td>1997-02-01</td>
+<td>0.050691</td>
+<td>-0.002025</td>
+<td>-0.002024</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">2</td>
+<td>1997-03-01</td>
+<td>0.052376</td>
+<td>0.028023</td>
+<td>-0.009084</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">3</td>
+<td>1997-04-01</td>
+<td>0.021277</td>
+<td>-0.008903</td>
+<td>-0.008972</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">4</td>
+<td>1997-05-01</td>
+<td>0.012259</td>
+<td>-0.052398</td>
+<td>-0.046748</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">116</td>
+<td>2006-09-01</td>
+<td>-0.016553</td>
+<td>-0.001403</td>
+<td>0.014327</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">117</td>
+<td>2006-10-01</td>
+<td>0.049261</td>
+<td>0.030730</td>
+<td>0.000202</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">118</td>
+<td>2006-11-01</td>
+<td>0.004430</td>
+<td>-0.025076</td>
+<td>0.004445</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">119</td>
+<td>2006-12-01</td>
+<td>-0.003660</td>
+<td>0.014682</td>
+<td>-0.019817</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">120</td>
+<td>2007-01-01</td>
+<td>0.020580</td>
+<td>0.050982</td>
+<td>0.001737</td>
+</tr>
+</tbody>
+</table>
+
+<p>121 rows × 4 columns</p>
+</div>
+</div>
+</div>
+</div>
+<div id="cell-3" class="cell" data-execution_count="99">
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co"># === Step 5: Load and clean predictors ===</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>predictors <span class="op">=</span> pd.read_csv(dataDir <span class="op">+</span> <span class="st">'Z - 197706.csv'</span>)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="st">'Unnamed: 0'</span> <span class="kw">in</span> predictors.columns:</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    predictors <span class="op">=</span> predictors.drop(columns<span class="op">=</span><span class="st">'Unnamed: 0'</span>)</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Define full predictor index list</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>full_predictor_list <span class="op">=</span> predictors.columns.drop(<span class="st">'Date'</span>)</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>significantPredictors <span class="op">=</span> np.arange(n_predictors_to_use)</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>predictorsNames <span class="op">=</span> full_predictor_list[significantPredictors]</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Subset actual predictor data</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>predictors <span class="op">=</span> predictors[[<span class="st">'Date'</span>] <span class="op">+</span> predictorsNames.tolist()]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div id="cell-4" class="cell" data-execution_count="100">
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>predictors</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="100">
+<div>
+<div>
+
+
+<table class="dataframe table table-sm table-striped small" data-quarto-postprocess="true" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">Date</th>
+<th data-quarto-table-cell-role="th">dp</th>
+<th data-quarto-table-cell-role="th">dy</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">0</td>
+<td>6/1/1977</td>
+<td>-3.137487</td>
+<td>-3.093125</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">1</td>
+<td>7/1/1977</td>
+<td>-3.110477</td>
+<td>-3.126833</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">2</td>
+<td>8/1/1977</td>
+<td>-3.078692</td>
+<td>-3.099958</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">3</td>
+<td>9/1/1977</td>
+<td>-3.065776</td>
+<td>-3.068260</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">4</td>
+<td>10/1/1977</td>
+<td>-3.008879</td>
+<td>-3.053255</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">470</td>
+<td>8/1/2016</td>
+<td>-3.879884</td>
+<td>-3.881104</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">471</td>
+<td>9/1/2016</td>
+<td>-3.874451</td>
+<td>-3.875687</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">472</td>
+<td>10/1/2016</td>
+<td>-3.849850</td>
+<td>-3.869467</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">473</td>
+<td>11/1/2016</td>
+<td>-3.878496</td>
+<td>-3.844892</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">474</td>
+<td>12/1/2016</td>
+<td>-3.891597</td>
+<td>-3.873560</td>
+</tr>
+</tbody>
+</table>
+
+<p>475 rows × 3 columns</p>
+</div>
+</div>
+</div>
+</div>
+<div id="cell-5" class="cell" data-execution_count="101">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>factors</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="101">
+<div>
+<div>
+
+
+<table class="dataframe table table-sm table-striped small" data-quarto-postprocess="true" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">Date</th>
+<th data-quarto-table-cell-role="th">Mkt-RF</th>
+<th data-quarto-table-cell-role="th">SMB</th>
+<th data-quarto-table-cell-role="th">HML</th>
+<th data-quarto-table-cell-role="th">RMW</th>
+<th data-quarto-table-cell-role="th">CMA</th>
+<th data-quarto-table-cell-role="th">MMOM</th>
+<th data-quarto-table-cell-role="th">PEAD</th>
+<th data-quarto-table-cell-role="th">FIN</th>
+<th data-quarto-table-cell-role="th">QMJ</th>
+<th data-quarto-table-cell-role="th">BAB</th>
+<th data-quarto-table-cell-role="th">MGMT</th>
+<th data-quarto-table-cell-role="th">PERF</th>
+<th data-quarto-table-cell-role="th">LIQ</th>
+<th data-quarto-table-cell-role="th">IFCR</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">0</td>
+<td>197706</td>
+<td>4.71</td>
+<td>2.07</td>
+<td>-0.64</td>
+<td>0.88</td>
+<td>-1.22</td>
+<td>0.00254</td>
+<td>0.254197</td>
+<td>-3.496845</td>
+<td>-0.833278</td>
+<td>-0.222857</td>
+<td>-0.997736</td>
+<td>1.001602</td>
+<td>2.04</td>
+<td>6.770000</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">1</td>
+<td>197707</td>
+<td>-1.69</td>
+<td>1.82</td>
+<td>-0.59</td>
+<td>0.83</td>
+<td>0.01</td>
+<td>0.31000</td>
+<td>-0.777627</td>
+<td>-1.804204</td>
+<td>0.918375</td>
+<td>2.860289</td>
+<td>1.112484</td>
+<td>0.318311</td>
+<td>0.65</td>
+<td>0.780000</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">2</td>
+<td>197708</td>
+<td>-1.75</td>
+<td>0.89</td>
+<td>-2.79</td>
+<td>0.96</td>
+<td>-0.62</td>
+<td>-1.77000</td>
+<td>1.927607</td>
+<td>-0.425940</td>
+<td>3.053999</td>
+<td>0.343675</td>
+<td>-0.611023</td>
+<td>2.661063</td>
+<td>2.95</td>
+<td>-1.770000</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">3</td>
+<td>197709</td>
+<td>-0.27</td>
+<td>1.56</td>
+<td>-0.49</td>
+<td>1.23</td>
+<td>-0.84</td>
+<td>2.05000</td>
+<td>1.091538</td>
+<td>-0.710903</td>
+<td>0.350445</td>
+<td>0.411783</td>
+<td>-0.117917</td>
+<td>1.727913</td>
+<td>1.36</td>
+<td>-2.250000</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">4</td>
+<td>197710</td>
+<td>-4.38</td>
+<td>1.50</td>
+<td>1.72</td>
+<td>-0.30</td>
+<td>-0.46</td>
+<td>-0.12000</td>
+<td>-0.817156</td>
+<td>1.698913</td>
+<td>1.051250</td>
+<td>0.183008</td>
+<td>0.814481</td>
+<td>0.375680</td>
+<td>-0.69</td>
+<td>-6.840000</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">470</td>
+<td>201608</td>
+<td>0.50</td>
+<td>1.72</td>
+<td>3.34</td>
+<td>-1.33</td>
+<td>-0.39</td>
+<td>-3.13000</td>
+<td>-1.077282</td>
+<td>-0.748204</td>
+<td>0.162624</td>
+<td>-1.853116</td>
+<td>1.854738</td>
+<td>-4.941121</td>
+<td>0.76</td>
+<td>7.711222</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">471</td>
+<td>201609</td>
+<td>0.25</td>
+<td>1.74</td>
+<td>-1.49</td>
+<td>-2.29</td>
+<td>-0.09</td>
+<td>-0.55000</td>
+<td>3.922935</td>
+<td>-3.092364</td>
+<td>-3.128983</td>
+<td>-0.161079</td>
+<td>-0.942982</td>
+<td>-2.172786</td>
+<td>2.35</td>
+<td>-3.201935</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">472</td>
+<td>201610</td>
+<td>-2.02</td>
+<td>-4.01</td>
+<td>4.16</td>
+<td>1.19</td>
+<td>0.24</td>
+<td>0.64000</td>
+<td>-1.363421</td>
+<td>4.251275</td>
+<td>2.765954</td>
+<td>1.111154</td>
+<td>3.244335</td>
+<td>2.000884</td>
+<td>-1.01</td>
+<td>6.262390</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">473</td>
+<td>201611</td>
+<td>4.86</td>
+<td>6.81</td>
+<td>8.29</td>
+<td>-0.10</td>
+<td>3.70</td>
+<td>-4.21000</td>
+<td>2.316516</td>
+<td>1.692563</td>
+<td>0.632527</td>
+<td>-1.598556</td>
+<td>4.898062</td>
+<td>-7.698465</td>
+<td>2.27</td>
+<td>13.450944</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">474</td>
+<td>201612</td>
+<td>1.82</td>
+<td>0.41</td>
+<td>3.58</td>
+<td>0.99</td>
+<td>-0.30</td>
+<td>-0.38000</td>
+<td>-1.683486</td>
+<td>4.512680</td>
+<td>1.476221</td>
+<td>3.786661</td>
+<td>0.453383</td>
+<td>0.485860</td>
+<td>-2.71</td>
+<td>5.811609</td>
+</tr>
+</tbody>
+</table>
+
+<p>475 rows × 15 columns</p>
+</div>
+</div>
+</div>
+</div>
+<div id="cell-6" class="cell">
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="co"># === Step 6: Truncate all to shared sample size and index ===</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>start_date <span class="op">=</span> <span class="st">'1997-01-01'</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>end_date <span class="op">=</span> <span class="st">'2006-12-01'</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>date_index <span class="op">=</span> pd.date_range(start<span class="op">=</span>start_date, end<span class="op">=</span>end_date, freq<span class="op">=</span><span class="st">'MS'</span>)</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>n <span class="op">=</span> <span class="bu">len</span>(date_index)</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>returns <span class="op">=</span> returns.iloc[:n].copy()</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>factors <span class="op">=</span> factors.iloc[:n].copy()</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>predictors <span class="op">=</span> predictors.iloc[:n].copy()</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a><span class="co"># === Convert decimal returns to percent returns ===</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> col <span class="kw">in</span> returns.columns:</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> col <span class="op">!=</span> <span class="st">'Date'</span>:</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>        returns[col] <span class="op">*=</span> <span class="dv">100</span></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>returns.index <span class="op">=</span> date_index</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>factors.index <span class="op">=</span> date_index</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>predictors.index <span class="op">=</span> date_index</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a><span class="co"># === Step 7: Reset index and rename for model compatibility ===</span></span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>returns_reset <span class="op">=</span> returns.reset_index().rename(columns<span class="op">=</span>{<span class="st">'index'</span>: <span class="st">'Date'</span>})</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a><span class="co">#returns_reset.drop(columns='Row Labels', inplace=True) </span></span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>factors_reset <span class="op">=</span> factors.reset_index().rename(columns<span class="op">=</span>{<span class="st">'index'</span>: <span class="st">'Date'</span>})</span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>predictors_reset <span class="op">=</span> predictors.reset_index().rename(columns<span class="op">=</span>{<span class="st">'index'</span>: <span class="st">'Date'</span>})</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div id="cell-7" class="cell" data-execution_count="103">
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>returns_reset</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="103">
+<div>
+<div>
+
+
+<table class="dataframe table table-sm table-striped small" data-quarto-postprocess="true" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">Date</th>
+<th data-quarto-table-cell-role="th">Date</th>
+<th data-quarto-table-cell-role="th">SPY</th>
+<th data-quarto-table-cell-role="th">30Y_Treasury</th>
+<th data-quarto-table-cell-role="th">Gold</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">0</td>
+<td>1997-01-01</td>
+<td>1997-01-01</td>
+<td>1.990142</td>
+<td>0.085207</td>
+<td>2.443066</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">1</td>
+<td>1997-02-01</td>
+<td>1997-02-01</td>
+<td>5.069090</td>
+<td>-0.202460</td>
+<td>-0.202411</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">2</td>
+<td>1997-03-01</td>
+<td>1997-03-01</td>
+<td>5.237638</td>
+<td>2.802304</td>
+<td>-0.908423</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">3</td>
+<td>1997-04-01</td>
+<td>1997-04-01</td>
+<td>2.127680</td>
+<td>-0.890253</td>
+<td>-0.897189</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">4</td>
+<td>1997-05-01</td>
+<td>1997-05-01</td>
+<td>1.225887</td>
+<td>-5.239841</td>
+<td>-4.674753</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">115</td>
+<td>2006-08-01</td>
+<td>2006-08-01</td>
+<td>1.196150</td>
+<td>-3.844253</td>
+<td>-3.722391</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">116</td>
+<td>2006-09-01</td>
+<td>2006-09-01</td>
+<td>-1.655333</td>
+<td>-0.140341</td>
+<td>1.432723</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">117</td>
+<td>2006-10-01</td>
+<td>2006-10-01</td>
+<td>4.926069</td>
+<td>3.072979</td>
+<td>0.020184</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">118</td>
+<td>2006-11-01</td>
+<td>2006-11-01</td>
+<td>0.442951</td>
+<td>-2.507588</td>
+<td>0.444461</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">119</td>
+<td>2006-12-01</td>
+<td>2006-12-01</td>
+<td>-0.365976</td>
+<td>1.468156</td>
+<td>-1.981693</td>
+</tr>
+</tbody>
+</table>
+
+<p>120 rows × 5 columns</p>
+</div>
+</div>
+</div>
+</div>
+<div id="cell-8" class="cell" data-execution_count="104">
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>factors_reset</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="104">
+<div>
+<div>
+
+
+<table class="dataframe table table-sm table-striped small" data-quarto-postprocess="true" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">Date</th>
+<th data-quarto-table-cell-role="th">Date</th>
+<th data-quarto-table-cell-role="th">Mkt-RF</th>
+<th data-quarto-table-cell-role="th">SMB</th>
+<th data-quarto-table-cell-role="th">HML</th>
+<th data-quarto-table-cell-role="th">RMW</th>
+<th data-quarto-table-cell-role="th">CMA</th>
+<th data-quarto-table-cell-role="th">MMOM</th>
+<th data-quarto-table-cell-role="th">PEAD</th>
+<th data-quarto-table-cell-role="th">FIN</th>
+<th data-quarto-table-cell-role="th">QMJ</th>
+<th data-quarto-table-cell-role="th">BAB</th>
+<th data-quarto-table-cell-role="th">MGMT</th>
+<th data-quarto-table-cell-role="th">PERF</th>
+<th data-quarto-table-cell-role="th">LIQ</th>
+<th data-quarto-table-cell-role="th">IFCR</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">0</td>
+<td>1997-01-01</td>
+<td>197706</td>
+<td>4.71</td>
+<td>2.07</td>
+<td>-0.64</td>
+<td>0.88</td>
+<td>-1.22</td>
+<td>0.00254</td>
+<td>0.254197</td>
+<td>-3.496845</td>
+<td>-0.833278</td>
+<td>-0.222857</td>
+<td>-0.997736</td>
+<td>1.001602</td>
+<td>2.04</td>
+<td>6.77</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">1</td>
+<td>1997-02-01</td>
+<td>197707</td>
+<td>-1.69</td>
+<td>1.82</td>
+<td>-0.59</td>
+<td>0.83</td>
+<td>0.01</td>
+<td>0.31000</td>
+<td>-0.777627</td>
+<td>-1.804204</td>
+<td>0.918375</td>
+<td>2.860289</td>
+<td>1.112484</td>
+<td>0.318311</td>
+<td>0.65</td>
+<td>0.78</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">2</td>
+<td>1997-03-01</td>
+<td>197708</td>
+<td>-1.75</td>
+<td>0.89</td>
+<td>-2.79</td>
+<td>0.96</td>
+<td>-0.62</td>
+<td>-1.77000</td>
+<td>1.927607</td>
+<td>-0.425940</td>
+<td>3.053999</td>
+<td>0.343675</td>
+<td>-0.611023</td>
+<td>2.661063</td>
+<td>2.95</td>
+<td>-1.77</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">3</td>
+<td>1997-04-01</td>
+<td>197709</td>
+<td>-0.27</td>
+<td>1.56</td>
+<td>-0.49</td>
+<td>1.23</td>
+<td>-0.84</td>
+<td>2.05000</td>
+<td>1.091538</td>
+<td>-0.710903</td>
+<td>0.350445</td>
+<td>0.411783</td>
+<td>-0.117917</td>
+<td>1.727913</td>
+<td>1.36</td>
+<td>-2.25</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">4</td>
+<td>1997-05-01</td>
+<td>197710</td>
+<td>-4.38</td>
+<td>1.50</td>
+<td>1.72</td>
+<td>-0.30</td>
+<td>-0.46</td>
+<td>-0.12000</td>
+<td>-0.817156</td>
+<td>1.698913</td>
+<td>1.051250</td>
+<td>0.183008</td>
+<td>0.814481</td>
+<td>0.375680</td>
+<td>-0.69</td>
+<td>-6.84</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">115</td>
+<td>2006-08-01</td>
+<td>198701</td>
+<td>12.47</td>
+<td>-1.51</td>
+<td>-3.18</td>
+<td>0.20</td>
+<td>-1.09</td>
+<td>2.08000</td>
+<td>4.225668</td>
+<td>0.252739</td>
+<td>0.362302</td>
+<td>3.633625</td>
+<td>-0.157206</td>
+<td>4.778856</td>
+<td>-7.14</td>
+<td>11.49</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">116</td>
+<td>2006-09-01</td>
+<td>198702</td>
+<td>4.39</td>
+<td>3.41</td>
+<td>-5.99</td>
+<td>-0.90</td>
+<td>-2.76</td>
+<td>-2.19000</td>
+<td>-0.231941</td>
+<td>-2.438246</td>
+<td>-0.279497</td>
+<td>0.531134</td>
+<td>-3.804977</td>
+<td>1.610734</td>
+<td>-4.05</td>
+<td>0.22</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">117</td>
+<td>2006-10-01</td>
+<td>198703</td>
+<td>1.64</td>
+<td>0.21</td>
+<td>1.66</td>
+<td>1.36</td>
+<td>4.03</td>
+<td>1.61000</td>
+<td>-1.067377</td>
+<td>4.181004</td>
+<td>-0.632858</td>
+<td>4.936611</td>
+<td>3.611447</td>
+<td>1.468149</td>
+<td>-1.24</td>
+<td>-1.60</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">118</td>
+<td>2006-11-01</td>
+<td>198704</td>
+<td>-2.11</td>
+<td>-1.55</td>
+<td>-0.33</td>
+<td>-0.46</td>
+<td>1.22</td>
+<td>0.27000</td>
+<td>1.385315</td>
+<td>1.216598</td>
+<td>0.568537</td>
+<td>0.420762</td>
+<td>2.235483</td>
+<td>2.364032</td>
+<td>-3.66</td>
+<td>-2.95</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">119</td>
+<td>2006-12-01</td>
+<td>198705</td>
+<td>0.11</td>
+<td>-0.59</td>
+<td>0.13</td>
+<td>0.52</td>
+<td>1.32</td>
+<td>-0.67000</td>
+<td>0.338471</td>
+<td>0.072593</td>
+<td>0.529690</td>
+<td>-0.350802</td>
+<td>1.140633</td>
+<td>0.793563</td>
+<td>0.66</td>
+<td>-0.35</td>
+</tr>
+</tbody>
+</table>
+
+<p>120 rows × 16 columns</p>
+</div>
+</div>
+</div>
+</div>
+<div id="cell-9" class="cell">
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co"># === Step 8: Define model parameters ===</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>Tau <span class="op">=</span> <span class="fl">1.5</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>index_end_of_estimation <span class="op">=</span> <span class="dv">119</span>  <span class="co"># Half of length of returns</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="co"># === Step 9: Instantiate model ===</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> Model(rr<span class="op">=</span>returns_reset,</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>              ff<span class="op">=</span>factors_reset,</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>              zz<span class="op">=</span>predictors_reset,</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>              significantPredictors<span class="op">=</span>significantPredictors,</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>              Tau<span class="op">=</span>Tau,</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>              indexEndOfEstimation<span class="op">=</span>index_end_of_estimation,</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>              key_demean_predictors<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a><span class="co"># === Step 10: Run conditional BMA expected return calculation ===</span></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>nModelsMax <span class="op">=</span> <span class="bu">pow</span>(<span class="dv">2</span>, model.KMax <span class="op">+</span> model.MMax)</span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>uniform_probs <span class="op">=</span> np.ones(nModelsMax) <span class="op">/</span> nModelsMax</span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>models_probabilities <span class="op">=</span> np.concatenate([uniform_probs, uniform_probs])</span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> model.conditionalAssetPricingOOSTauNumba(</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>    models_probabilities<span class="op">=</span>models_probabilities,</span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>    nModelsInPrediction<span class="op">=</span><span class="dv">0</span>  <span class="co"># Use full model space</span></span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Tau= 1.500000 
+Date    2006-12-01 00:00:00
+Date                 198705
+Name: 119, dtype: object
+Date    2006-12-01 00:00:00
+Date               5/1/1987
+Name: 119, dtype: object
+Date            2006-12-01 00:00:00
+Date                     2006-12-01
+SPY                       -0.365976
+30Y_Treasury               1.468156
+Gold                      -1.981693
+Name: 119, dtype: object
+Market SR^2 in the estimation period= 0.023418
+ZEstimation mean and std
+[-3.07953652 -3.07030448]
+[0.17009425 0.16567299]
+ZTest mean and std
+[nan nan]
+[nan nan]
+After demeaning
+ZEstimation mean and std
+[5.67239999e-16 5.44848947e-16]
+[1. 1.]
+ZTest mean and std
+[nan nan]
+[nan nan]
+REstimation.shape= (119, 3)
+RTest.shape= (0, 3)
+FEstimation.shape= (119, 14)
+FTest.shape= (0, 14)
+ZEstimation.shape= (119, 2)
+ZTest.shape= (0, 2)
+KMax= 14, MMax= 2, T= 119, keyConditionalAPM=1
+***** conditionalAssetPricingOOSTauNumba **** 
+Sum of probabilities= 2.000000
+Number of models to use in prediction= 0 
+Model  0 out of 65536
+Model  6553 out of 65536
+Model  13106 out of 65536
+Model  19659 out of 65536
+Model  26212 out of 65536
+Model  32765 out of 65536
+Model  39318 out of 65536
+Model  45871 out of 65536
+Model  52424 out of 65536
+Model  58977 out of 65536
+Model  65530 out of 65536
+Elapsed time: 119.404062 seconds.
+
+All combinations= 65536 Total number of legit models= 32772 
+Cumulative probability of models= 1.000122</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>c:\Users\Tor Osted\OneDrive\Dokumenter\GitHub\speciale_repo\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:3904: RuntimeWarning: Mean of empty slice.
+  return _methods._mean(a, axis=axis, dtype=dtype,
+c:\Users\Tor Osted\OneDrive\Dokumenter\GitHub\speciale_repo\.venv\Lib\site-packages\numpy\_core\_methods.py:139: RuntimeWarning: invalid value encountered in divide
+  ret = um.true_divide(
+c:\Users\Tor Osted\OneDrive\Dokumenter\GitHub\speciale_repo\.venv\Lib\site-packages\numpy\_core\_methods.py:227: RuntimeWarning: Degrees of freedom &lt;= 0 for slice
+  ret = _var(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+c:\Users\Tor Osted\OneDrive\Dokumenter\GitHub\speciale_repo\.venv\Lib\site-packages\numpy\_core\_methods.py:184: RuntimeWarning: invalid value encountered in divide
+  arrmean = um.true_divide(arrmean, div, out=arrmean,
+c:\Users\Tor Osted\OneDrive\Dokumenter\GitHub\speciale_repo\.venv\Lib\site-packages\numpy\_core\_methods.py:216: RuntimeWarning: invalid value encountered in divide
+  ret = um.true_divide(</code></pre>
+</div>
+</div>
+<div id="cell-10" class="cell" data-execution_count="112">
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>expected_returns <span class="op">=</span> result[<span class="dv">5</span>]  <span class="co"># Extract expected returns</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>expected_returns</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="112">
+<pre><code>array([[ 6.89203161e-01,  3.99770210e-01,  2.77168760e-01, ...,
+         6.92008824e-01,  3.90306257e-01,  2.81970872e-01],
+       [ 6.92008824e-01,  3.90306257e-01,  2.81970872e-01, ...,
+         6.94717330e-01,  3.92280695e-01,  2.81418713e-01],
+       [ 6.94717330e-01,  3.92280695e-01,  2.81418713e-01, ...,
+         6.95632569e-01,  3.97172416e-01,  2.79274696e-01],
+       ...,
+       [ 6.56284507e-01,  3.62418764e-01,  2.90779749e-01, ...,
+         6.54393167e-01,  3.58239605e-01,  2.92504224e-01],
+       [ 6.54393167e-01,  3.58239605e-01,  2.92504224e-01, ...,
+         6.56294512e-01,  3.52357589e-01,  2.95294888e-01],
+       [ 6.56294512e-01,  3.52357589e-01,  2.95294888e-01, ...,
+        -6.87237741e+04,  3.50195458e+05,  2.75802131e+02]])</code></pre>
+</div>
+</div>
+<div id="cell-11" class="cell" data-execution_count="113">
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>result</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="113">
+<pre><code>(array([], shape=(0, 17), dtype=float64),
+ array([], shape=(0, 17), dtype=float64),
+ array([], shape=(0, 17, 17), dtype=float64),
+ array([], shape=(0, 17, 17), dtype=float64),
+ array([], shape=(0, 17, 17), dtype=float64),
+ array([[ 6.89203161e-01,  3.99770210e-01,  2.77168760e-01, ...,
+          6.92008824e-01,  3.90306257e-01,  2.81970872e-01],
+        [ 6.92008824e-01,  3.90306257e-01,  2.81970872e-01, ...,
+          6.94717330e-01,  3.92280695e-01,  2.81418713e-01],
+        [ 6.94717330e-01,  3.92280695e-01,  2.81418713e-01, ...,
+          6.95632569e-01,  3.97172416e-01,  2.79274696e-01],
+        ...,
+        [ 6.56284507e-01,  3.62418764e-01,  2.90779749e-01, ...,
+          6.54393167e-01,  3.58239605e-01,  2.92504224e-01],
+        [ 6.54393167e-01,  3.58239605e-01,  2.92504224e-01, ...,
+          6.56294512e-01,  3.52357589e-01,  2.95294888e-01],
+        [ 6.56294512e-01,  3.52357589e-01,  2.95294888e-01, ...,
+         -6.87237741e+04,  3.50195458e+05,  2.75802131e+02]]),
+ array([[ 4.75012130e-01,  1.66004135e-01,  1.05411315e-01, ...,
+          4.78880578e-01,  1.57370045e-01,  1.08694959e-01],
+        [ 4.78880578e-01,  1.57370045e-01,  1.08694959e-01, ...,
+          4.82634681e-01,  1.59277168e-01,  1.07776466e-01],
+        [ 4.82634681e-01,  1.59277168e-01,  1.07776466e-01, ...,
+          4.83899900e-01,  1.63724206e-01,  1.05872378e-01],
+        ...,
+        [ 4.31270153e-01,  1.37314259e-01,  1.23579743e-01, ...,
+          4.28858608e-01,  1.34881400e-01,  1.25542317e-01],
+        [ 4.28858608e-01,  1.34881400e-01,  1.25542317e-01, ...,
+          4.31338469e-01,  1.31237365e-01,  1.27630357e-01],
+        [ 4.31338469e-01,  1.31237365e-01,  1.27630357e-01, ...,
+         -3.17449254e+04,  2.25782433e+05, -2.71936297e+04]]),
+ array([[[4.75012130e-001, 2.75501016e-001, 1.90999197e-001, ...,
+          2.75501016e-001, 1.66004135e-001, 1.16666462e-001],
+         [2.75501016e-001, 1.66004135e-001, 1.16666462e-001, ...,
+          1.90999197e-001, 1.16666462e-001, 1.05411315e-001],
+         [1.90999197e-001, 1.16666462e-001, 1.05411315e-001, ...,
+          1.95704631e-001, 1.14446291e-001, 6.91105924e-002],
+         ...,
+         [4.78880578e-001, 2.70082200e-001, 1.95108984e-001, ...,
+          2.70082200e-001, 1.57370045e-001, 1.14925681e-001],
+         [2.70082200e-001, 1.57370045e-001, 1.14925681e-001, ...,
+          1.95108984e-001, 1.14925681e-001, 1.08694959e-001],
+         [1.95108984e-001, 1.14925681e-001, 1.08694959e-001, ...,
+          1.94714162e-001, 1.10729189e-001, 7.00431049e-002]],
+ 
+        [[4.78880578e-001, 2.70082200e-001, 1.95108984e-001, ...,
+          2.70082200e-001, 1.57370045e-001, 1.14925681e-001],
+         [2.70082200e-001, 1.57370045e-001, 1.14925681e-001, ...,
+          1.95108984e-001, 1.14925681e-001, 1.08694959e-001],
+         [1.95108984e-001, 1.14925681e-001, 1.08694959e-001, ...,
+          1.94714162e-001, 1.10729189e-001, 7.00431049e-002],
+         ...,
+         [4.82634681e-001, 2.72501264e-001, 1.95512668e-001, ...,
+          2.72501264e-001, 1.59277168e-001, 1.15559875e-001],
+         [2.72501264e-001, 1.59277168e-001, 1.15559875e-001, ...,
+          1.95512668e-001, 1.15559875e-001, 1.07776466e-001],
+         [1.95512668e-001, 1.15559875e-001, 1.07776466e-001, ...,
+          1.94944892e-001, 1.11009924e-001, 6.99156038e-002]],
+ 
+        [[4.82634681e-001, 2.72501264e-001, 1.95512668e-001, ...,
+          2.72501264e-001, 1.59277168e-001, 1.15559875e-001],
+         [2.72501264e-001, 1.59277168e-001, 1.15559875e-001, ...,
+          1.95512668e-001, 1.15559875e-001, 1.07776466e-001],
+         [1.95512668e-001, 1.15559875e-001, 1.07776466e-001, ...,
+          1.94944892e-001, 1.11009924e-001, 6.99156038e-002],
+         ...,
+         [4.83899900e-001, 2.76281600e-001, 1.94277675e-001, ...,
+          2.76281600e-001, 1.63724206e-001, 1.16682242e-001],
+         [2.76281600e-001, 1.63724206e-001, 1.16682242e-001, ...,
+          1.94277675e-001, 1.16682242e-001, 1.05872378e-001],
+         [1.94277675e-001, 1.16682242e-001, 1.05872378e-001, ...,
+          1.95495685e-001, 1.12558773e-001, 6.95099095e-002]],
+ 
+        ...,
+ 
+        [[4.31270153e-001, 2.38453546e-001, 1.90330885e-001, ...,
+          2.38453546e-001, 1.37314259e-001, 1.04456029e-001],
+         [2.38453546e-001, 1.37314259e-001, 1.04456029e-001, ...,
+          1.90330885e-001, 1.04456029e-001, 1.23579743e-001],
+         [1.90330885e-001, 1.04456029e-001, 1.23579743e-001, ...,
+          1.90632464e-001, 1.05771903e-001, 7.17918613e-002],
+         ...,
+         [4.28858608e-001, 2.35129356e-001, 1.90852116e-001, ...,
+          2.35129356e-001, 1.34881400e-001, 1.03065324e-001],
+         [2.35129356e-001, 1.34881400e-001, 1.03065324e-001, ...,
+          1.90852116e-001, 1.03065324e-001, 1.25542317e-001],
+         [1.90852116e-001, 1.03065324e-001, 1.25542317e-001, ...,
+          1.90076801e-001, 1.04511562e-001, 7.21342865e-002]],
+ 
+        [[4.28858608e-001, 2.35129356e-001, 1.90852116e-001, ...,
+          2.35129356e-001, 1.34881400e-001, 1.03065324e-001],
+         [2.35129356e-001, 1.34881400e-001, 1.03065324e-001, ...,
+          1.90852116e-001, 1.03065324e-001, 1.25542317e-001],
+         [1.90852116e-001, 1.03065324e-001, 1.25542317e-001, ...,
+          1.90076801e-001, 1.04511562e-001, 7.21342865e-002],
+         ...,
+         [4.31338469e-001, 2.31950250e-001, 1.93236474e-001, ...,
+          2.31950250e-001, 1.31237365e-001, 1.01592099e-001],
+         [2.31950250e-001, 1.31237365e-001, 1.01592099e-001, ...,
+          1.93236474e-001, 1.01592099e-001, 1.27630357e-001],
+         [1.93236474e-001, 1.01592099e-001, 1.27630357e-001, ...,
+          1.89488173e-001, 1.02211184e-001, 7.26809948e-002]],
+ 
+        [[4.31338469e-001, 2.31950250e-001, 1.93236474e-001, ...,
+          2.31950250e-001, 1.31237365e-001, 1.01592099e-001],
+         [2.31950250e-001, 1.31237365e-001, 1.01592099e-001, ...,
+          1.93236474e-001, 1.01592099e-001, 1.27630357e-001],
+         [1.93236474e-001, 1.01592099e-001, 1.27630357e-001, ...,
+          1.89488173e-001, 1.02211184e-001, 7.26809948e-002],
+         ...,
+         [2.27819876e-305, 2.27819876e-305, 2.27819876e-305, ...,
+          2.27819876e-305, 2.27819876e-305, 2.27819876e-305],
+         [2.27819876e-305, 2.27819876e-305, 2.27819876e-305, ...,
+          2.27819876e-305, 2.27819876e-305, 2.27819876e-305],
+         [2.27819876e-305, 2.27819876e-305, 2.27819876e-305, ...,
+          2.27819876e-305, 2.27819876e-305, 2.27819876e-305]]]),
+ array([[[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000]],
+ 
+        [[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000]],
+ 
+        [[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000]],
+ 
+        ...,
+ 
+        [[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000]],
+ 
+        [[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000]],
+ 
+        [[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 2.27819876e-305,  2.27819876e-305,  2.27819876e-305, ...,
+           2.27819876e-305,  2.27819876e-305,  2.14847931e+004],
+         [ 2.27819876e-305,  2.27819876e-305,  2.14847931e+004, ...,
+           2.24483837e+004,  9.34330956e+001,  3.08357344e+004],
+         [ 2.24483837e+004,  9.34330956e+001,  3.08357344e+004, ...,
+           1.80656538e+004, -1.44968330e+002,  1.60094592e+004]]]),
+ array([[[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000]],
+ 
+        [[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000]],
+ 
+        [[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000]],
+ 
+        ...,
+ 
+        [[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000]],
+ 
+        [[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000]],
+ 
+        [[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 4.88420596e-307,  4.88609508e-307,  0.00000000e+000, ...,
+           4.97742767e-315,  0.00000000e+000,  2.38111096e+003],
+         [ 4.97742767e-315,  0.00000000e+000,  2.38111096e+003, ...,
+           3.51958335e+003,  8.20695385e+002,  1.24303054e+004],
+         [ 3.51958335e+003,  8.20695385e+002,  1.24303054e+004, ...,
+           1.98178280e+004,  1.05384969e+002, -6.41339960e+001]]]),
+ 1.0001220703125)</code></pre>
+</div>
+</div>
+<div id="cell-12" class="cell" data-execution_count="117">
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>expected_returns</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>expected_returns.shape</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="bu">type</span>(expected_returns)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="117">
+<pre><code>numpy.ndarray</code></pre>
+</div>
+</div>
+<div id="cell-13" class="cell">
+<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 1: Flatten expected_returns</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>expected_returns_flat <span class="op">=</span> expected_returns.flatten()</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 2: Define asset names (in same order as your returns DataFrame)</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>asset_names <span class="op">=</span> [<span class="st">'SPY'</span>, <span class="st">'30Y_Treasury'</span>, <span class="st">'Gold'</span>]  <span class="co"># adjust if needed</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>N <span class="op">=</span> <span class="bu">len</span>(asset_names)</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 3: Extract only expected returns for assets (not factors)</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>expected_asset_returns <span class="op">=</span> expected_returns_flat[:N]</span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 4: Create DataFrame with Date as index and assets as columns</span></span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>expected_returns_df <span class="op">=</span> pd.DataFrame(</span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>    [expected_asset_returns], </span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>    columns<span class="op">=</span>returns_reset.columns[<span class="dv">1</span>:N<span class="op">+</span><span class="dv">1</span>]</span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a>expected_returns_df</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="118">
+<div>
+<div>
+
+
+<table class="dataframe table table-sm table-striped small" data-quarto-postprocess="true" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">Date</th>
+<th data-quarto-table-cell-role="th">SPY</th>
+<th data-quarto-table-cell-role="th">30Y_Treasury</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">0</td>
+<td>0.689203</td>
+<td>0.39977</td>
+<td>0.277169</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+</div>
+<div id="cell-14" class="cell">
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>result</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="13">
+<pre><code>(array([[3.00203360e-003, 6.98422259e-001, 2.83974344e-001, ...,
+         3.00229505e-003, 6.98422272e-001, 2.83974375e-001],
+        [3.00229505e-003, 6.98422272e-001, 2.83974375e-001, ...,
+         3.00190834e-003, 6.98422385e-001, 2.83974285e-001],
+        [3.00190834e-003, 6.98422385e-001, 2.83974285e-001, ...,
+         3.00123002e-003, 6.98422240e-001, 2.83974240e-001],
+        ...,
+        [2.99375264e-003, 6.98421813e-001, 2.83973362e-001, ...,
+         2.99373219e-003, 6.98421774e-001, 2.83973372e-001],
+        [2.99373219e-003, 6.98421774e-001, 2.83973372e-001, ...,
+         2.99385009e-003, 6.98421799e-001, 2.83973380e-001],
+        [2.99385009e-003, 6.98421799e-001, 2.83973380e-001, ...,
+         4.22704536e-307, 4.22706501e-307, 2.10539394e-305]]),
+ array([[9.01220703e-006, 5.61532251e-001, 1.08191271e-001, ...,
+         9.01377729e-006, 5.61532274e-001, 1.08191279e-001],
+        [9.01377729e-006, 5.61532274e-001, 1.08191279e-001, ...,
+         9.01145519e-006, 5.61532433e-001, 1.08191254e-001],
+        [9.01145519e-006, 5.61532433e-001, 1.08191254e-001, ...,
+         9.00738192e-006, 5.61532210e-001, 1.08191244e-001],
+        ...,
+        [8.96257005e-006, 5.61531464e-001, 1.08191016e-001, ...,
+         8.96244778e-006, 5.61531406e-001, 1.08191020e-001],
+        [8.96244778e-006, 5.61531406e-001, 1.08191020e-001, ...,
+         8.96315307e-006, 5.61531444e-001, 1.08191021e-001],
+        [8.96315307e-006, 5.61531444e-001, 1.08191021e-001, ...,
+         3.07998212e-307, 3.08010695e-307, 1.21265049e-305]]),
+ array([[[9.01220703e-06, 2.09669167e-03, 8.52497654e-04, ...,
+          2.09669167e-03, 5.61532251e-01, 2.23523378e-01],
+         [2.09669167e-03, 5.61532251e-01, 2.23523378e-01, ...,
+          8.52497654e-04, 2.23523378e-01, 1.08191271e-01],
+         [8.52497654e-04, 2.23523378e-01, 1.08191271e-01, ...,
+          5.72332369e-04, 1.50036294e-01, 5.33617228e-02],
+         ...,
+         [9.01377729e-06, 2.09687490e-03, 8.52571627e-04, ...,
+          2.09687490e-03, 5.61532274e-01, 2.23523392e-01],
+         [2.09687490e-03, 5.61532274e-01, 2.23523392e-01, ...,
+          8.52571627e-04, 2.23523392e-01, 1.08191279e-01],
+         [8.52571627e-04, 2.23523392e-01, 1.08191279e-01, ...,
+          5.72383932e-04, 1.50036337e-01, 5.33617430e-02]],
+ 
+        [[9.01377729e-06, 2.09687490e-03, 8.52571627e-04, ...,
+          2.09687490e-03, 5.61532274e-01, 2.23523392e-01],
+         [2.09687490e-03, 5.61532274e-01, 2.23523392e-01, ...,
+          8.52571627e-04, 2.23523392e-01, 1.08191279e-01],
+         [8.52571627e-04, 2.23523392e-01, 1.08191279e-01, ...,
+          5.72383932e-04, 1.50036337e-01, 5.33617430e-02],
+         ...,
+         [9.01145519e-06, 2.09660427e-03, 8.52462082e-04, ...,
+          2.09660427e-03, 5.61532433e-01, 2.23523372e-01],
+         [2.09660427e-03, 5.61532433e-01, 2.23523372e-01, ...,
+          8.52462082e-04, 2.23523372e-01, 1.08191254e-01],
+         [8.52462082e-04, 2.23523372e-01, 1.08191254e-01, ...,
+          5.72308083e-04, 1.50036398e-01, 5.33617311e-02]],
+ 
+        [[9.01145519e-06, 2.09660427e-03, 8.52462082e-04, ...,
+          2.09660427e-03, 5.61532433e-01, 2.23523372e-01],
+         [2.09660427e-03, 5.61532433e-01, 2.23523372e-01, ...,
+          8.52462082e-04, 2.23523372e-01, 1.08191254e-01],
+         [8.52462082e-04, 2.23523372e-01, 1.08191254e-01, ...,
+          5.72308083e-04, 1.50036398e-01, 5.33617311e-02],
+         ...,
+         [9.00738192e-06, 2.09612855e-03, 8.52270276e-04, ...,
+          2.09612855e-03, 5.61532210e-01, 2.23523333e-01],
+         [2.09612855e-03, 5.61532210e-01, 2.23523333e-01, ...,
+          8.52270276e-04, 2.23523333e-01, 1.08191244e-01],
+         [8.52270276e-04, 2.23523333e-01, 1.08191244e-01, ...,
+          5.72173950e-04, 1.50036181e-01, 5.33616635e-02]],
+ 
+        ...,
+ 
+        [[8.96257005e-06, 2.09088797e-03, 8.50154762e-04, ...,
+          2.09088797e-03, 5.61531464e-01, 2.23522909e-01],
+         [2.09088797e-03, 5.61531464e-01, 2.23522909e-01, ...,
+          8.50154762e-04, 2.23522909e-01, 1.08191016e-01],
+         [8.50154762e-04, 2.23522909e-01, 1.08191016e-01, ...,
+          5.70699082e-04, 1.50034892e-01, 5.33610772e-02],
+         ...,
+         [8.96244778e-06, 2.09087352e-03, 8.50149015e-04, ...,
+          2.09087352e-03, 5.61531406e-01, 2.23522908e-01],
+         [2.09087352e-03, 5.61531406e-01, 2.23522908e-01, ...,
+          8.50149015e-04, 2.23522908e-01, 1.08191020e-01],
+         [8.50149015e-04, 2.23522908e-01, 1.08191020e-01, ...,
+          5.70694927e-04, 1.50034852e-01, 5.33610703e-02]],
+ 
+        [[8.96244778e-06, 2.09087352e-03, 8.50149015e-04, ...,
+          2.09087352e-03, 5.61531406e-01, 2.23522908e-01],
+         [2.09087352e-03, 5.61531406e-01, 2.23522908e-01, ...,
+          8.50149015e-04, 2.23522908e-01, 1.08191020e-01],
+         [8.50149015e-04, 2.23522908e-01, 1.08191020e-01, ...,
+          5.70694927e-04, 1.50034852e-01, 5.33610703e-02],
+         ...,
+         [8.96315307e-06, 2.09095621e-03, 8.50182352e-04, ...,
+          2.09095621e-03, 5.61531444e-01, 2.23522915e-01],
+         [2.09095621e-03, 5.61531444e-01, 2.23522915e-01, ...,
+          8.50182352e-04, 2.23522915e-01, 1.08191021e-01],
+         [8.50182352e-04, 2.23522915e-01, 1.08191021e-01, ...,
+          5.70718239e-04, 1.50034890e-01, 5.33610820e-02]],
+ 
+        [[8.96315307e-06, 2.09095621e-03, 8.50182352e-04, ...,
+          2.09095621e-03, 5.61531444e-01, 2.23522915e-01],
+         [2.09095621e-03, 5.61531444e-01, 2.23522915e-01, ...,
+          8.50182352e-04, 2.23522915e-01, 1.08191021e-01],
+         [8.50182352e-04, 2.23522915e-01, 1.08191021e-01, ...,
+          5.70718239e-04, 1.50034890e-01, 5.33610820e-02],
+         ...,
+         [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, ...,
+          0.00000000e+00, 0.00000000e+00, 0.00000000e+00],
+         [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, ...,
+          0.00000000e+00, 0.00000000e+00, 0.00000000e+00],
+         [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, ...,
+          0.00000000e+00, 0.00000000e+00, 0.00000000e+00]]]),
+ array([[[ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         ...,
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00]],
+ 
+        [[ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         ...,
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00]],
+ 
+        [[ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         ...,
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00]],
+ 
+        ...,
+ 
+        [[ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         ...,
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00]],
+ 
+        [[ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         ...,
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00]],
+ 
+        [[ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         ...,
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00, -2.09646961e-03],
+         [ 0.00000000e+00,  0.00000000e+00, -2.09646961e-03, ...,
+           6.06742655e-02,  5.49506799e-02, -2.99826529e+03],
+         [ 6.06742655e-02,  5.49506799e-02, -2.99826529e+03, ...,
+           1.68237665e+04,  6.65263248e-03, -4.65097319e-04]]]),
+ array([[[0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         ...,
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.]],
+ 
+        [[0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         ...,
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.]],
+ 
+        [[0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         ...,
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.]],
+ 
+        ...,
+ 
+        [[0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         ...,
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.]],
+ 
+        [[0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         ...,
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.]],
+ 
+        [[0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         ...,
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.],
+         [0., 0., 0., ..., 0., 0., 0.]]]),
+ array([[2.99846510e-003, 6.98422113e-001, 2.83973905e-001, ...,
+         2.99839684e-003, 6.98422047e-001, 2.83973918e-001],
+        [2.99839684e-003, 6.98422047e-001, 2.83973918e-001, ...,
+         2.99871786e-003, 6.98422061e-001, 2.83973957e-001],
+        [2.99871786e-003, 6.98422061e-001, 2.83973957e-001, ...,
+         2.99897362e-003, 6.98422095e-001, 2.83973980e-001],
+        ...,
+        [3.00171483e-003, 6.98422251e-001, 2.83974303e-001, ...,
+         3.00162944e-003, 6.98422296e-001, 2.83974276e-001],
+        [3.00162944e-003, 6.98422296e-001, 2.83974276e-001, ...,
+         3.00164146e-003, 6.98422216e-001, 2.83974304e-001],
+        [3.00164146e-003, 6.98422216e-001, 2.83974304e-001, ...,
+         4.23886253e-307, 4.23888232e-307, 2.11103414e-305]]),
+ array([[8.99079373e-006, 5.61531979e-001, 1.08191157e-001, ...,
+         8.99038445e-006, 5.61531881e-001, 1.08191161e-001],
+        [8.99038445e-006, 5.61531881e-001, 1.08191161e-001, ...,
+         8.99230926e-006, 5.61531907e-001, 1.08191171e-001],
+        [8.99230926e-006, 5.61531907e-001, 1.08191171e-001, ...,
+         8.99384298e-006, 5.61531961e-001, 1.08191177e-001],
+        ...,
+        [9.01029275e-006, 5.61532233e-001, 1.08191260e-001, ...,
+         9.00978005e-006, 5.61532299e-001, 1.08191253e-001],
+        [9.00978005e-006, 5.61532299e-001, 1.08191253e-001, ...,
+         9.00985221e-006, 5.61532181e-001, 1.08191261e-001],
+        [9.00985221e-006, 5.61532181e-001, 1.08191261e-001, ...,
+         3.10198216e-307, 3.10211160e-307, 1.21048448e-305]]),
+ array([[[8.99079373e-06, 2.09419083e-03, 8.51487988e-04, ...,
+          2.09419083e-03, 5.61531979e-01, 2.23523176e-01],
+         [2.09419083e-03, 5.61531979e-01, 2.23523176e-01, ...,
+          8.51487988e-04, 2.23523176e-01, 1.08191157e-01],
+         [8.51487988e-04, 2.23523176e-01, 1.08191157e-01, ...,
+          5.71628679e-04, 1.50035733e-01, 5.33614508e-02],
+         ...,
+         [8.99038445e-06, 2.09414280e-03, 8.51468738e-04, ...,
+          2.09414280e-03, 5.61531881e-01, 2.23523172e-01],
+         [2.09414280e-03, 5.61531881e-01, 2.23523172e-01, ...,
+          8.51468738e-04, 2.23523172e-01, 1.08191161e-01],
+         [8.51468738e-04, 2.23523172e-01, 1.08191161e-01, ...,
+          5.71615018e-04, 1.50035662e-01, 5.33614370e-02]],
+ 
+        [[8.99038445e-06, 2.09414280e-03, 8.51468738e-04, ...,
+          2.09414280e-03, 5.61531881e-01, 2.23523172e-01],
+         [2.09414280e-03, 5.61531881e-01, 2.23523172e-01, ...,
+          8.51468738e-04, 2.23523172e-01, 1.08191161e-01],
+         [8.51468738e-04, 2.23523172e-01, 1.08191161e-01, ...,
+          5.71615018e-04, 1.50035662e-01, 5.33614370e-02],
+         ...,
+         [8.99230926e-06, 2.09436777e-03, 8.51559565e-04, ...,
+          2.09436777e-03, 5.61531907e-01, 2.23523190e-01],
+         [2.09436777e-03, 5.61531907e-01, 2.23523190e-01, ...,
+          8.51559565e-04, 2.23523190e-01, 1.08191171e-01],
+         [8.51559565e-04, 2.23523190e-01, 1.08191171e-01, ...,
+          5.71678324e-04, 1.50035714e-01, 5.33614616e-02]],
+ 
+        [[8.99230926e-06, 2.09436777e-03, 8.51559565e-04, ...,
+          2.09436777e-03, 5.61531907e-01, 2.23523190e-01],
+         [2.09436777e-03, 5.61531907e-01, 2.23523190e-01, ...,
+          8.51559565e-04, 2.23523190e-01, 1.08191171e-01],
+         [8.51559565e-04, 2.23523190e-01, 1.08191171e-01, ...,
+          5.71678324e-04, 1.50035714e-01, 5.33614616e-02],
+         ...,
+         [8.99384298e-06, 2.09454709e-03, 8.51631906e-04, ...,
+          2.09454709e-03, 5.61531961e-01, 2.23523205e-01],
+         [2.09454709e-03, 5.61531961e-01, 2.23523205e-01, ...,
+          8.51631906e-04, 2.23523205e-01, 1.08191177e-01],
+         [8.51631906e-04, 2.23523205e-01, 1.08191177e-01, ...,
+          5.71728834e-04, 1.50035777e-01, 5.33614844e-02]],
+ 
+        ...,
+ 
+        [[9.01029275e-06, 2.09646828e-03, 8.52407457e-04, ...,
+          2.09646828e-03, 5.61532233e-01, 2.23523360e-01],
+         [2.09646828e-03, 5.61532233e-01, 2.23523360e-01, ...,
+          8.52407457e-04, 2.23523360e-01, 1.08191260e-01],
+         [8.52407457e-04, 2.23523360e-01, 1.08191260e-01, ...,
+          5.72269523e-04, 1.50036248e-01, 5.33616992e-02],
+         ...,
+         [9.00978005e-06, 2.09640858e-03, 8.52383247e-04, ...,
+          2.09640858e-03, 5.61532299e-01, 2.23523355e-01],
+         [2.09640858e-03, 5.61532299e-01, 2.23523355e-01, ...,
+          8.52383247e-04, 2.23523355e-01, 1.08191253e-01],
+         [8.52383247e-04, 2.23523355e-01, 1.08191253e-01, ...,
+          5.72252839e-04, 1.50036281e-01, 5.33616993e-02]],
+ 
+        [[9.00978005e-06, 2.09640858e-03, 8.52383247e-04, ...,
+          2.09640858e-03, 5.61532299e-01, 2.23523355e-01],
+         [2.09640858e-03, 5.61532299e-01, 2.23523355e-01, ...,
+          8.52383247e-04, 2.23523355e-01, 1.08191253e-01],
+         [8.52383247e-04, 2.23523355e-01, 1.08191253e-01, ...,
+          5.72252839e-04, 1.50036281e-01, 5.33616993e-02],
+         ...,
+         [9.00985221e-06, 2.09641677e-03, 8.52386729e-04, ...,
+          2.09641677e-03, 5.61532181e-01, 2.23523355e-01],
+         [2.09641677e-03, 5.61532181e-01, 2.23523355e-01, ...,
+          8.52386729e-04, 2.23523355e-01, 1.08191261e-01],
+         [8.52386729e-04, 2.23523355e-01, 1.08191261e-01, ...,
+          5.72254953e-04, 1.50036206e-01, 5.33616892e-02]],
+ 
+        [[9.00985221e-06, 2.09641677e-03, 8.52386729e-04, ...,
+          2.09641677e-03, 5.61532181e-01, 2.23523355e-01],
+         [2.09641677e-03, 5.61532181e-01, 2.23523355e-01, ...,
+          8.52386729e-04, 2.23523355e-01, 1.08191261e-01],
+         [8.52386729e-04, 2.23523355e-01, 1.08191261e-01, ...,
+          5.72254953e-04, 1.50036206e-01, 5.33616892e-02],
+         ...,
+         [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, ...,
+          0.00000000e+00, 0.00000000e+00, 0.00000000e+00],
+         [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, ...,
+          0.00000000e+00, 0.00000000e+00, 0.00000000e+00],
+         [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, ...,
+          0.00000000e+00, 0.00000000e+00, 0.00000000e+00]]]),
+ array([[[ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         ...,
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00]],
+ 
+        [[ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         ...,
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00]],
+ 
+        [[ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         ...,
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00]],
+ 
+        ...,
+ 
+        [[ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         ...,
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00]],
+ 
+        [[ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         ...,
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00]],
+ 
+        [[ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00,  0.00000000e+00],
+         ...,
+         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, ...,
+           0.00000000e+00,  0.00000000e+00, -2.09646961e-03],
+         [ 0.00000000e+00,  0.00000000e+00, -2.09646961e-03, ...,
+           6.06742655e-02,  4.18542480e-02, -2.99826529e+03],
+         [ 6.06742655e-02,  4.18542480e-02, -2.99826529e+03, ...,
+           1.68237665e+04,  5.14821735e-03,  4.53242959e-04]]]),
+ array([[[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000]],
+ 
+        [[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000]],
+ 
+        [[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000]],
+ 
+        ...,
+ 
+        [[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000]],
+ 
+        [[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000]],
+ 
+        [[ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           0.00000000e+000,  0.00000000e+000,  0.00000000e+000],
+         ...,
+         [ 0.00000000e+000,  0.00000000e+000,  0.00000000e+000, ...,
+           5.59305710e-315,  0.00000000e+000,  1.20135502e-002],
+         [ 5.59305710e-315,  0.00000000e+000,  1.20135502e-002, ...,
+           2.44792771e-002,  1.27675252e-002, -4.98539900e+002],
+         [ 2.44792771e-002,  1.27675252e-002, -4.98539900e+002, ...,
+           6.71768674e+003, -8.34961599e-003, -6.63130834e-005]]]),
+ 1.0001220703125)</code></pre>
+</div>
+</div>
+<div id="cell-15" class="cell">
+<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># === Step 1: Flatten expected returns ===</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>expected_returns_flat <span class="op">=</span> expected_returns.flatten()</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>asset_names <span class="op">=</span> [<span class="st">'SPY'</span>, <span class="st">'30Y_Treasury'</span>, <span class="st">'Gold'</span>]</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>N <span class="op">=</span> <span class="bu">len</span>(asset_names)</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>expected_asset_returns <span class="op">=</span> expected_returns_flat[:N]</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a><span class="co"># === Step 2: Get actual return for Jan 2007 from original returns file ===</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>actual_returns <span class="op">=</span> pd.read_csv(dataDir <span class="op">+</span> <span class="st">'Simulated_Returns_Data.csv'</span>)</span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>actual_returns[<span class="st">'Date'</span>] <span class="op">=</span> pd.to_datetime(actual_returns[<span class="st">'Date'</span>])</span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>actual_return_row <span class="op">=</span> actual_returns[actual_returns[<span class="st">'Date'</span>] <span class="op">==</span> <span class="st">'2007-01-01'</span>]</span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>actual_asset_returns <span class="op">=</span> actual_return_row[asset_names].values.flatten()</span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a><span class="co"># === Step 3: Create comparison DataFrame ===</span></span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>comparison_df <span class="op">=</span> pd.DataFrame({</span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>    <span class="st">'Date'</span>: pd.to_datetime([<span class="st">'2007-01-01'</span>] <span class="op">*</span> N),</span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>    <span class="st">'Asset'</span>: asset_names,</span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>    <span class="st">'Actual Return (%)'</span>: actual_asset_returns,</span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a>    <span class="st">'Expected Return (%)'</span>: expected_asset_returns,</span>
+<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>comparison_df[<span class="st">'Difference (%)'</span>] <span class="op">=</span> comparison_df[<span class="st">'Actual Return (%)'</span>] <span class="op">-</span> comparison_df[<span class="st">'Expected Return (%)'</span>]</span>
+<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a>comparison_df</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="18">
+<div>
+<div>
+
+
+<table class="dataframe table table-sm table-striped small" data-quarto-postprocess="true" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">Date</th>
+<th data-quarto-table-cell-role="th">Asset</th>
+<th data-quarto-table-cell-role="th">Actual Return (%)</th>
+<th data-quarto-table-cell-role="th">Expected Return (%)</th>
+<th data-quarto-table-cell-role="th">Difference (%)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">0</td>
+<td>2007-01-01</td>
+<td>SPY</td>
+<td>0.020580</td>
+<td>0.003002</td>
+<td>0.017578</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">1</td>
+<td>2007-01-01</td>
+<td>30Y_Treasury</td>
+<td>0.050982</td>
+<td>0.698422</td>
+<td>-0.647440</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">2</td>
+<td>2007-01-01</td>
+<td>Gold</td>
+<td>0.001737</td>
+<td>0.283974</td>
+<td>-0.282237</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+</div>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+    const config = {
+      allowHTML: true,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start',
+    };
+    if (contentFn) {
+      config.content = contentFn;
+    }
+    if (onTriggerFn) {
+      config.onTrigger = onTriggerFn;
+    }
+    if (onUntriggerFn) {
+      config.onUntrigger = onUntriggerFn;
+    }
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+  const xrefs = window.document.querySelectorAll('a.quarto-xref');
+  const processXRef = (id, note) => {
+    // Strip column container classes
+    const stripColumnClz = (el) => {
+      el.classList.remove("page-full", "page-columns");
+      if (el.children) {
+        for (const child of el.children) {
+          stripColumnClz(child);
+        }
+      }
+    }
+    stripColumnClz(note)
+    if (id === null || id.startsWith('sec-')) {
+      // Special case sections, only their first couple elements
+      const container = document.createElement("div");
+      if (note.children && note.children.length > 2) {
+        container.appendChild(note.children[0].cloneNode(true));
+        for (let i = 1; i < note.children.length; i++) {
+          const child = note.children[i];
+          if (child.tagName === "P" && child.innerText === "") {
+            continue;
+          } else {
+            container.appendChild(child.cloneNode(true));
+            break;
+          }
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(container);
+        }
+        return container.innerHTML
+      } else {
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        return note.innerHTML;
+      }
+    } else {
+      // Remove any anchor links if they are present
+      const anchorLink = note.querySelector('a.anchorjs-link');
+      if (anchorLink) {
+        anchorLink.remove();
+      }
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(note);
+      }
+      // TODO in 1.5, we should make sure this works without a callout special case
+      if (note.classList.contains("callout")) {
+        return note.outerHTML;
+      } else {
+        return note.innerHTML;
+      }
+    }
+  }
+  for (var i=0; i<xrefs.length; i++) {
+    const xref = xrefs[i];
+    tippyHover(xref, undefined, function(instance) {
+      instance.disable();
+      let url = xref.getAttribute('href');
+      let hash = undefined; 
+      if (url.startsWith('#')) {
+        hash = url;
+      } else {
+        try { hash = new URL(url).hash; } catch {}
+      }
+      if (hash) {
+        const id = hash.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note !== null) {
+          try {
+            const html = processXRef(id, note.cloneNode(true));
+            instance.setContent(html);
+          } finally {
+            instance.enable();
+            instance.show();
+          }
+        } else {
+          // See if we can fetch this
+          fetch(url.split('#')[0])
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.getElementById(id);
+            if (note !== null) {
+              const html = processXRef(id, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      } else {
+        // See if we can fetch a full url (with no hash to target)
+        // This is a special case and we should probably do some content thinning / targeting
+        fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+          const note = htmlDoc.querySelector('main.content');
+          if (note !== null) {
+            // This should only happen for chapter cross references
+            // (since there is no id in the URL)
+            // remove the first header
+            if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+              note.children[0].remove();
+            }
+            const html = processXRef(null, note);
+            instance.setContent(html);
+          } 
+        }).finally(() => {
+          instance.enable();
+          instance.show();
+        });
+      }
+    }, function(instance) {
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            div.style.left = 0;
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+        // Handle positioning of the toggle
+    window.addEventListener(
+      "resize",
+      throttle(() => {
+        elRect = undefined;
+        if (selectedAnnoteEl) {
+          selectCodeLines(selectedAnnoteEl);
+        }
+      }, 10)
+    );
+    function throttle(fn, ms) {
+    let throttle = false;
+    let timer;
+      return (...args) => {
+        if(!throttle) { // first call gets through
+            fn.apply(this, args);
+            throttle = true;
+        } else { // all the others get throttled
+            if(timer) clearTimeout(timer); // cancel #2
+            timer = setTimeout(() => {
+              fn.apply(this, args);
+              timer = throttle = false;
+            }, ms);
+        }
+      };
+    }
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
