@@ -99,7 +99,7 @@ def myInverseMatrix(A, Error_str):
                 print(string + 'Failed ')
 
     return AInv
-@njit
+
 def printFactorsProbabilities(factorsNames, factorsProbability):
     print('Probabilities of factors')
     print(factorsNames)
@@ -111,7 +111,7 @@ def printFactorsProbabilities(factorsNames, factorsProbability):
     print(factorsProbability[I])
 
     return
-@njit
+
 def printPredictorsProbabilities(predictorsNames, predictorsProbability):
     print('Probabilities of Predictors')
     print(predictorsNames)
@@ -124,7 +124,6 @@ def printPredictorsProbabilities(predictorsNames, predictorsProbability):
 
     return
 
-@njit
 def printFactorsAndPredictorsProbabilities(factorsNames, factorsProbability, predictorsNames, predictorsProbability):
 
     printFactorsProbabilities(factorsNames, factorsProbability)
