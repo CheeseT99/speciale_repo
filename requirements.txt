@@ -3,4 +3,5 @@ pandas
 plotly
 scipy
 statsmodels
+cvxopt
 -e prospect_package

@@ -19,7 +19,6 @@ import os
 from cvxopt import matrix, solvers
 import statsmodels.api as sm
 import scipy
-from numba import njit
 
 from CommonFunctions import constructAllCombinationsMatrix, retreiveRowFromAllCombinationsMatrix, \
     retreiveRowFromAllCombinationsMatrixNumba, printFactorsAndPredictorsProbabilities, tileNumba, \
@@ -45,7 +44,6 @@ def retreiveFactorsAndPredictorsFromRowFromAllCombinationsMatrix(model, KMax, MM
 
 # ========== End of retreiveFactorsAndPredictorsFromRowFromAllCombinationsMatrix ==========
 # ======================================================================================================================
-
 def setUncontionalFilter(KMax, MMax):
     nModelsMax = pow(2, KMax + MMax)
     filter = np.zeros((nModelsMax,), dtype=np.float64)
@@ -62,14 +60,13 @@ def setUncontionalFilter(KMax, MMax):
 
 # ========== End of setUncontionalFilter ==========
 # ======================================================================================================================
-
 def modelsProbabilities(MarginalLikelihoodU,MarginalLikelihoodR, models_factors_included, KMax, MMax):
     nModelsMax = pow(2, KMax + MMax)
     nModels = models_factors_included.shape[0]
     assert KMax == models_factors_included.shape[1]
     # The columns are unrestricted conditional, unrestricted unconditional, restricted conditional, restricted unconditional.
-    modelsProbabilities = np.zeros((nModels,4),np.float)
-    modelsProbabilitiesCounter = np.zeros((nModels,4),int)
+    modelsProbabilities = np.zeros((nModels,4),np.float64)
+    modelsProbabilitiesCounter = np.zeros((nModels,4),np.int64)
 
     for model in np.arange(0, nModelsMax):
         factorsIncludedInModel, predictorsIncludedInModel = \
@@ -96,11 +93,10 @@ def modelsProbabilities(MarginalLikelihoodU,MarginalLikelihoodR, models_factors_
 
 # ========== End of setUncontionalFilter ==========
 # ======================================================================================================================
-
 def calculateFactorsAndPredictorsProbabilities(MarginalLikelihood, KMax , MMax):
     factorsProbability    = np.zeros((KMax,), dtype=np.float64)
     predictorsProbability = np.zeros((MMax,), dtype=np.float64)
-    combinationsRowFromMatrix = np.zeros((KMax + MMax,) , dtype=int)
+    combinationsRowFromMatrix = np.zeros((KMax + MMax,) , dtype=np.int64)
 
     nModelsMax = pow(2, KMax+MMax)
     for model in np.arange(0, nModelsMax):
@@ -113,7 +109,6 @@ def calculateFactorsAndPredictorsProbabilities(MarginalLikelihood, KMax , MMax):
 
 # ========== End of calculateFactorsAndPredictorsProbabilities ==========
 # ======================================================================================================================
-
 def calculateMarginalLikelihoodAndFactorsPredictorsProbabilities(logMarginalLikelihood, ntopModels, KMax, MMax,        \
                                                                  factorsNames, predictorsNames,                        \
                                                                  factorsInModel=None, predictorsInModel=None, keyPrintResults=True):
@@ -187,7 +182,6 @@ def calculateMarginalLikelihoodAndFactorsPredictorsProbabilities(logMarginalLike
 
 # ========== End of calculateMarginalLikelihoodAndFactorsPredictorsProbabilities ==========
 # ======================================================================================================================
-
 def conditionalAssetPricingLogMarginalLikelihoodTau(rr, ff, zz, significantPredictors, Tau):
 
     # Constants.
@@ -460,7 +454,7 @@ def conditionalAssetPricingLogMarginalLikelihoodTau(rr, ff, zz, significantPredi
         XtF  = np.transpose(X) @ F
         WtR  = np.transpose(W) @ R
 
-        S0    = T0 / T * ( RtR - np.transpose(beta0) @ ( FtF ) @ beta0)
+        S0    = T0 / T * ( RtR - np.transpose(beta0) @ (y @ beta0))
         Sf0   = T0 * Vf
 
         Tstar   = T0 + T
@@ -675,7 +669,7 @@ class Model:
             self.REstimation = np.ascontiguousarray(copy.deepcopy( \
                         rr.loc[self.keyConditionalCAPM : indexEndOfEstimation, self.testAssetsPortfoliosNames].values))
             self.RTest       = np.ascontiguousarray(copy.deepcopy( \
-                        rr.loc[indexEndOfEstimation + 1 :,self.testAssetsPortfoliosNames].values))
+                        rr.loc[indexEndOfEstimation + 1 :, testAssetsPortfoliosNames].values))
         else:
             self.REstimation = np.zeros((0,0),dtype=np.float64)
             self.RTest = np.zeros((0,0),dtype=np.float64)
@@ -714,8 +708,7 @@ class Model:
             print(self.factorsNames[5-1] + ' <--> ' + self.factorsNames[9-1])
 
 # ========== End of Constructor ==========
-# ======================================================================================================================
-    
+
     def conditionalAssetPricingLogMarginalLikelihoodTau(self):
         # Constants.
         ntopModels = 10
@@ -743,7 +736,7 @@ class Model:
                 logMarginalLikelihoodR, factorsProbabilityR, predictorsProbabilityR)
 
     # ========== End of method conditionalAssetPricingLogMarginalLikelihoodTau ==========
-    #
+
     def conditionalAssetPricingLogMarginalLikelihoodTauNumba(self):
         # Constants.
         ntopModels = 10
@@ -783,7 +776,7 @@ class Model:
                 predictorsProbability, T0IncreasedFraction, T0Max, T0Min, T0Avg, T0_div_T0_plus_TAvg, T_div_T0_plus_TAvg,\
                 logMarginalLikelihoodR, factorsProbabilityR, predictorsProbabilityR)
     # ========== End of method conditionalAssetPricingLogMarginalLikelihoodTauNumba ==========
-   # 
+
     def conditionalAssetPricingOOSTauNumba(self, models_probabilities, nModelsInPrediction):
         # Constants.
 
@@ -816,7 +809,7 @@ class Model:
                     cumulative_probability)
 
     # ========== End of method conditionalAssetPricingOOSTauNumba ==========
-    #
+
     def conditionalAssetPricingSingleOOSTauNumba(self, models_probabilities, single_top_model):
         # Constants.
         nModelsInPrediction = -single_top_model
@@ -855,7 +848,7 @@ class Model:
                     cumulative_probability)
 
     # ========== End of method conditionalAssetPricingSingleOOSTauNumba ==========
-   # 
+    
     def conditionalAssetCalculateSpread(self, models_probabilities, nModelsInPrediction):
         # Constants.
 
@@ -912,7 +905,6 @@ class Model:
 #                                                            gamma=gamma, only_top_model=True, dump_directory=dump_directory, num_top=top)
 
     # In this function the arguments covariance_matrix_in_sample and covariance_matrix_OOS are the V_t components in eq. 5 
-    #
     def AnalyseInSampleAndOOSPortfolioReturns(self, \
                                         returns_in_sample, returns_square_in_sample, returns_interactions_in_sample, \
                                         covariance_matrix_in_sample, covariance_matrix_no_ER_in_sample, \
@@ -1360,7 +1352,6 @@ class Model:
 
     # This method recevies the MKT returns, facotrs returns, tau and KMax and calculartes T0.
     @staticmethod
-    
     def calculateT0(R_MKT, F, tau, KMax):
             SRMKT = np.mean(R_MKT)/np.std(R_MKT)
             F_mean = np.mean(F, axis=0)
@@ -1378,14 +1369,12 @@ class Model:
     
     # This method recevies the mothly returns and returns the annual Sharpe ratio.
     @staticmethod
-    
     def SharpeRatio(r):        
         return np.mean(r)/np.sqrt(np.cov(r,rowvar=False, bias=False))*np.sqrt(12)
 
     # ========== End of Method SharpeRatio ==========
 
     @staticmethod
-    
     def unconditional_model_portfolio_returns(r_observed, r_estimated):
         N = r_estimated.shape[1]
         assert r_estimated.shape[1] == r_observed.shape[1]
@@ -1405,7 +1394,6 @@ class Model:
     # ========== End of method unconditional_model_portfolio_returns ==========
 
     @staticmethod
-    
     def GMVP_unconditional_model_portfolio_returns(r_observed, r_estimated):
         N = r_estimated.shape[1]
         assert r_estimated.shape[1] == r_observed.shape[1]
@@ -1427,7 +1415,6 @@ class Model:
 
 
     @staticmethod
-    
     def BMA_diagonal_cov_portfolio_returns(r_observed, r_estimated, r_square_estimated, variance_matrix):
         T = r_observed.shape[0]
         N = r_observed.shape[1]
@@ -1489,7 +1476,6 @@ class Model:
     # ========== End of method BMA_diagonal_cov_portfolio_returns ==========
 
     @staticmethod
-    
     def diagonal_cov_regulation_T_portfolio_returns(r_observed, r_estimated, r_square_estimated, variance_matrix, gamma):
         T = r_observed.shape[0]
         N = r_observed.shape[1]
@@ -1537,7 +1523,6 @@ class Model:
 
     # ========== End of method diagonal_cov_regulation_T_portfolio_returns ==========   
     @staticmethod
-    
     def BMA_full_cov_portfolio_returns(r_observed, r_estimated, r_square_estimated, \
                                         returns_interactions_estimated, variance_matrix):
         T = r_observed.shape[0]
@@ -1608,7 +1593,6 @@ class Model:
     # ========== End of method BMA_full_cov_portfolio_returns ==========
 
     @staticmethod
-    
     def full_cov_regulation_T_portfolio_returns(r_observed, r_estimated, r_square_estimated, \
                                                 returns_interactions_estimated, variance_matrix, gamma):
         T = r_observed.shape[0]
@@ -1649,7 +1633,6 @@ class Model:
 # ========== End of Model Class ==========
 
 # ======================================================================================================================
-
 def conditionalAssetPricingLogMarginalLikelihoodTauNew(ROrig, FOrig, ZOrig, OmegaOrig, Tau, SR2Mkt):
 
     print("calculating both unrestricted and restricted models")
@@ -2305,7 +2288,6 @@ def calculatePredictions(Z, T, AfTilda, phiTilda, phiTildaR, \
                          Sr, SrR, Sf, XtXInv, WtWInv, WRtWRInv, \
                          predictorsIndicesIncludedInModel, factorsIndicesIncludedInModel, otherFactors, \
                          unrestricted_model_probability, restricted_model_probability):
-    print("KMAX", KMax)
 
     iotaT = np.ones((T, 1), dtype=np.float64)
 
@@ -2547,7 +2529,6 @@ def calculatePredictions(Z, T, AfTilda, phiTilda, phiTildaR, \
 
 def conditionalAssetPricingOOSPredictionsTauNumba(ROrig, FOrig, ZOrig, OmegaOrig, Tau, SR2Mkt, ZTest, \
                                                   models_probabilities, nModelsInPrediction):
-    print("round1")
 
     key_Avoid_duplicate_predictors = 1
 
@@ -2562,13 +2543,11 @@ def conditionalAssetPricingOOSPredictionsTauNumba(ROrig, FOrig, ZOrig, OmegaOrig
     MMax = ZOrig.shape[1]
     KMaxPlusMMax = KMax + MMax
     T = FOrig.shape[0]
-    print(T,"forig")
 
     NMinTestAssets = ROrig.shape[1]
     TOOS = len(ZTest)
     # Out of sample returns and square returns.
     returns_OOS = np.zeros((TOOS, NMinTestAssets + KMax), dtype=np.float64)
-    print(np.shape(returns_OOS),TOOS, "return_OOS")
     returns_square_OOS = np.zeros((TOOS, NMinTestAssets + KMax), dtype=np.float64)
     returns_interactions_OOS = np.zeros((TOOS, NMinTestAssets + KMax, NMinTestAssets + KMax), dtype=np.float64)
     covariance_matrix_OOS = np.zeros((TOOS, NMinTestAssets + KMax, NMinTestAssets + KMax), dtype=np.float64)
@@ -2582,7 +2561,6 @@ def conditionalAssetPricingOOSPredictionsTauNumba(ROrig, FOrig, ZOrig, OmegaOrig
 
     # in sample returns and square returns.
     returns_IN = np.zeros((T, NMinTestAssets + KMax), dtype=np.float64)
-    print(np.shape(returns_IN),T, "return_IN")
     returns_square_IN = np.zeros((T, NMinTestAssets + KMax), dtype=np.float64)
     returns_interactions_IN = np.zeros((T, NMinTestAssets + KMax, NMinTestAssets + KMax), dtype=np.float64)
     covariance_matrix_IN = np.zeros((T, NMinTestAssets + KMax, NMinTestAssets + KMax), dtype=np.float64)
@@ -2847,7 +2825,25 @@ def conditionalAssetPricingOOSPredictionsTauNumba(ROrig, FOrig, ZOrig, OmegaOrig
         WRtWR = np.transpose(WR) @ WR
     #     try:
         WRtWRInv = LA.pinv(WRtWR)
-
+    #     except np.linalg.LinAlgError as e:
+    #         print('Error %s in model number %i' % (e, model))
+    #         # print(WRtWR[0,:])
+    #         print(factorsIndicesIncludedInModel)
+    #         print(predictorsIndicesIncludedInModel)
+    #         # logMarginalLikelihoodR[model] = -np.inf
+    #         string = 'Trying normal inverse ... '
+    #         try:
+    #             WRtWRInv = LA.inv(WRtWR)
+    #             print(string + 'LA.inv worked')
+    #         except:
+    #             string += 'Failed trying scipy pinvh'
+    #             try:
+    #                 WRtWRInv = SPLA.pinvh(WRtWR)
+    #                 print(string + 'SPLA.pinvh worked')
+    #             except:
+    #                 print(string + 'Failed assaining NINF')
+    #                 continue
+    #
         phiTildaR = T / Tstar * WRtWRInv @ (np.transpose(WR) @ R + T0 / T * WRtWR @ phi0R)
 
         SrR = S0 + np.transpose(R - WR @ phiTildaR) @ (R - WR @ phiTildaR) + \
@@ -2859,12 +2855,10 @@ def conditionalAssetPricingOOSPredictionsTauNumba(ROrig, FOrig, ZOrig, OmegaOrig
                 cov_matrix_single_restricted_IN, return_single_restricted_IN,\
                 Returns_terms_weighted_IN, Returns_terms_square_weighted_IN, Returns_terms_cumulative_probability_IN) = \
                                 calculatePredictions(ZOrig, T, AfTilda, phiTilda, phiTildaR, \
-                                        (NMinTestAssets + KMax), K, M, T, Tstar, \
+                                        KMax, K, M, T, Tstar, \
                                         Sr, SrR, Sf, XtXInv, WtWInv, WRtWRInv, \
                                         predictorsIndicesIncludedInModel, factorsIndicesIncludedInModel, otherFactors,\
                                         models_probabilities[model], models_probabilities[model + nModelsMax])
-        print("returns SHASPE", np.shape(returns))
-        print("returns_In SHAPE", np.shape(returns_IN))
 
         returns_IN  += returns
         returns_square_IN += returns_square
@@ -2878,7 +2872,7 @@ def conditionalAssetPricingOOSPredictionsTauNumba(ROrig, FOrig, ZOrig, OmegaOrig
                 cov_matrix_single_restricted_OOS, return_single_restricted_OOS, \
                 Returns_terms_weighted_OOS, Returns_terms_square_weighted_OOS, Returns_terms_cumulative_probability_OOS) = \
                                 calculatePredictions(ZTest, TOOS, AfTilda, phiTilda, phiTildaR, \
-                                        (NMinTestAssets + KMax), K, M, T, Tstar, \
+                                        KMax, K, M, T, Tstar, \
                                         Sr, SrR, Sf, XtXInv, WtWInv, WRtWRInv, \
                                         predictorsIndicesIncludedInModel, factorsIndicesIncludedInModel, otherFactors,\
                                         models_probabilities[model], models_probabilities[model + nModelsMax])
@@ -3378,7 +3372,7 @@ if __name__ == '__main__':
         summary_statistics = 8
         variance_matrix    = 9
         factors_variance   = 10
-        factors_inclusion  = 17
+        factors_inclusion  = 11
         analyse_OOS_performance = 12
         calculate_spread   = 13
         calculate_spread_post_processing = 14
@@ -3387,18 +3381,13 @@ if __name__ == '__main__':
         testAssets80_f14_m13 = 1
         testAssets0_f20_m13 = 2
 
-        # Get the directory containing this Python file
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    homeDir = "/home/lior/Characteristics/python/PostProb/"
+    dataDir = r"C:\Users\Tor Osted\OneDrive\Dokumenter\BMALASTTRY\Complemetary Code Files for Submission\Data"
 
-    # Use that as your home directory
-    homeDir = script_dir
-
-    # Build subdirectories relative to the script directory
-    dataDir = os.path.join(homeDir, "Data")
     dump_file_prefix = 'conditional_dump_models_MMax_'
 
     #key_start = Start.calculate_ML
-    key_start = Start.load_results_singles
+    #key_start = Start.load_results_singles
     #key_start = Start.predict_OOS
     #key_start = Start.single_model_predict_OOS
     #key_start = Start.analyse_OOS
@@ -3406,28 +3395,29 @@ if __name__ == '__main__':
     #key_start = Start.variance_matrix
     #key_start = Start.factors_variance
     #key_start = Start.analyse_OOS_performance
-    #key_start = Start.calculate_spread
+    key_start = Start.calculate_spread
     #key_start = Start.calculate_spread_post_processing
 
-    #key_DataBase = DataBase.testAssets80_f14_m13
-    key_DataBase = DataBase.testAssets0_f20_m13
+    key_DataBase = DataBase.testAssets80_f14_m13
+    #key_DataBase = DataBase.testAssets0_f20_m13
 
     # Loading the input files.
     if key_DataBase == DataBase.testAssets80_f14_m13:
+        directory_name_prefix = homeDir + '\\conditionalTauDMN0F14M13s'
         significantPredictors = np.array([2,5,7,9,13]) ; significantPredictors -= 1
-        significantPredictors = np.array([])
+        significantPredictors = np.array([2])
         key_Avoid_duplicate_factors = True
 
         # All factors and test assets returns are in percentage.
         # Loading the input files.
         # The risk free rate.
-        RF = pd.read_csv(dataDir + "RF.csv")
-        RF = RF.drop(columns='Unnamed: 0')
+       # RF = pd.read_csv(dataDir + "\\RF.csv")
+      #  RF = RF.drop(columns='Unnamed: 0')
 
         # Test asstets. Loading all portfolios.
 
-        R = pd.read_csv(dataDir + 'AnomaliesPortfoliosReturnsVW.csv')
-        R = R.drop(columns='Unnamed: 0')
+        R = pd.read_csv(dataDir + '\\returns.csv')
+        #R = R.drop(columns='Unnamed: 0')
 
         testAssetsPortfoliosNames = R.columns.drop('Date')
         print(' max, min of R are= %f, %f' % (np.max(R[testAssetsPortfoliosNames].values), np.min(R[testAssetsPortfoliosNames].values)))
@@ -3435,20 +3425,20 @@ if __name__ == '__main__':
         # Subtract the risk free rate from the test assets to get excess return.
         # The original test assets returns are numbers and not percentage. Convert all the returns to percentage.
         for name in testAssetsPortfoliosNames:
-            R[name] = R[name].values * 100 - RF['RF'].values
+            R[name] = R[name].values * 100 #- RF['RF'].values
 
         print(' max, min of R are= %f, %f' % (np.max(R[testAssetsPortfoliosNames].values), np.min(R[testAssetsPortfoliosNames].values)))
 
         # Loading the factors.
-        F = pd.read_csv(dataDir + 'ff.csv')
-        F = F.drop(columns='Unnamed: 0')
+        F = pd.read_csv(dataDir + '\\factors-20.csv')
+        #F = F.drop(columns='Unnamed: 0')
         factorsNames = F.columns.drop('Date')
         # Loading the predictors.
-        Z = pd.read_csv(dataDir + r'/Z.csv')
+        Z = pd.read_csv(dataDir + '\\Z - 197706.csv')
         Z = Z.drop(columns='Unnamed: 0')
 
     elif key_DataBase == DataBase.testAssets0_f20_m13:
-        directory_name_prefix = homeDir + 'conditionalTauDMN0F14M13s'
+        directory_name_prefix = homeDir + '\\conditionalTauDMN0F14M13s'
 
         significantPredictors = np.array([1,4,9,11])
         # significantPredictors = np.array([])
@@ -3461,7 +3451,7 @@ if __name__ == '__main__':
         R = pd.DataFrame({'': []})
 
         # Loading the factors.
-        F = pd.read_csv(dataDir + r'/factors-20.csv')
+        F = pd.read_csv(dataDir + '\\factors-20.csv')
         F = F.drop(columns=['MKTRF','SMB*','MKT','CON','IA', 'ROE', 'ME'])
         factorsNames = F.columns.drop('Date')
 
@@ -3470,7 +3460,7 @@ if __name__ == '__main__':
             F[name] = F[name].values * 100
 
         # Loading the predictors.
-        Z = pd.read_csv(dataDir + r'/Z - 197706.csv')
+        Z = pd.read_csv(dataDir + '\\Z - 197706.csv')
         Z = Z.drop(columns='Unnamed: 0')
 
         assert len(Z) == len(F)
@@ -4025,11 +4015,11 @@ if __name__ == '__main__':
                 multicolumn = multicolumn + " & "
                 if sample == sample_list[0]:
                     columns_names.append("EST")
-                    multicolumn = multicolumn + r" \multicolumn{1}{c} {$" + str(sample) + "$}"
+                    multicolumn = multicolumn + " \multicolumn{1}{c} {$" + str(sample) + "$}"
                     dump_directory = homeDir + "conditionalTauDMN0F14M13s" + str(tau_index) + "/"
                 else:
                     x = sample.split('_')            
-                    multicolumn = multicolumn + r" \multicolumn{2}{c} {$\\frac{" + str(x[0]) + "}{" + str(x[1]) + "}$} "
+                    multicolumn = multicolumn + " \multicolumn{2}{c} {$\\frac{" + str(x[0]) + "}{" + str(x[1]) + "}$} "
                     columns_names.append("EST")            
                     columns_names.append("OOS")
                     dump_directory = homeDir + "conditionalTau" + str(sample) + "NumbaDMN0F14M13s" + str(tau_index) + "/"
@@ -4251,8 +4241,8 @@ if __name__ == '__main__':
         # Equal to
         #cum_return = np.cumsum(np.log(1 + returns.loc[start_index:][models_list].values/100), axis=0)
         maximum_drawdown = np.zeros((len(models_list),), dtype=np.float64)
-        maximum_drawdown_start = np.zeros((len(models_list),), dtype=int)
-        maximum_drawdown_end = np.zeros((len(models_list),), dtype=int)
+        maximum_drawdown_start = np.zeros((len(models_list),), dtype=np.int64)
+        maximum_drawdown_end = np.zeros((len(models_list),), dtype=np.int64)
         for m in np.arange(0, len(models_list)):
             for i in np.arange(0, len(cum_return)-1):
                 for ii in np.arange(i + 1, len(cum_return)):
@@ -4713,7 +4703,7 @@ if __name__ == '__main__':
         fig, axs = plt.subplots()
         fig.set_size_inches(fig_size[0],fig_size[1])
         axs.set_xlabel('Year')
-        axs.set_ylabel(r'$\\frac{|V_t+\Omega_t|}{|V_t|}$')
+        axs.set_ylabel('$\\frac{|V_t+\Omega_t|}{|V_t|}$')
         
         axs.plot(DF['Date Plot'].values, 1/DF['VMR T'].values, 'C1', label='BMA (T)')
         axs.plot(DF['Date Plot'].values, 1/DF['VMR T_2'].values, 'C2', label='BMA $(\\frac{T}{2})$')
@@ -4976,7 +4966,7 @@ if __name__ == '__main__':
                 if len(filter) != nModelsMax:
                     UnconditionalMispricingProbList = []
                     filter = setUncontionalFilter(KMax, MMax)
-                    # filter = np.zeros((nModelsMax,), dtype=int)
+                    # filter = np.zeros((nModelsMax,), dtype=np.int)
                     # for model in np.arange(0, nModelsMax):
                     #     factorsIncludedInModel, predictorsIncludedInModel = \
                     #         retreiveFactorsAndPredictorsFromRowFromAllCombinationsMatrix(model, KMax, MMax)
