@@ -3382,12 +3382,13 @@ if __name__ == '__main__':
         testAssets0_f20_m13 = 2
 
     homeDir = "/home/lior/Characteristics/python/PostProb/"
-    dataDir = r"C:\Users\Tor Osted\OneDrive\Dokumenter\BMALASTTRY\Complemetary Code Files for Submission\Data"
+    #dataDir = r"C:\Users\Tor Osted\OneDrive\Dokumenter\BMALASTTRY\Complemetary Code Files for Submission\Data"
+    dataDir = os.path.join(os.path.join(os.path.join(os.path.join(os.path.dirname(os.getcwd()),'speciale_repo'),'den_her_du_skal_kigge_i'),'Complemetary Code Files for Submission'), 'Data')
 
     dump_file_prefix = 'conditional_dump_models_MMax_'
 
     #key_start = Start.calculate_ML
-    #key_start = Start.load_results_singles
+    key_start = Start.load_results_singles
     #key_start = Start.predict_OOS
     #key_start = Start.single_model_predict_OOS
     #key_start = Start.analyse_OOS
@@ -3395,7 +3396,7 @@ if __name__ == '__main__':
     #key_start = Start.variance_matrix
     #key_start = Start.factors_variance
     #key_start = Start.analyse_OOS_performance
-    key_start = Start.calculate_spread
+    #key_start = Start.calculate_spread
     #key_start = Start.calculate_spread_post_processing
 
     key_DataBase = DataBase.testAssets80_f14_m13
@@ -3416,7 +3417,7 @@ if __name__ == '__main__':
 
         # Test asstets. Loading all portfolios.
 
-        R = pd.read_csv(dataDir + '\\returns.csv')
+        R = pd.read_csv(os.path.join(dataDir,'returns.csv'))
         #R = R.drop(columns='Unnamed: 0')
 
         testAssetsPortfoliosNames = R.columns.drop('Date')
@@ -3430,11 +3431,11 @@ if __name__ == '__main__':
         print(' max, min of R are= %f, %f' % (np.max(R[testAssetsPortfoliosNames].values), np.min(R[testAssetsPortfoliosNames].values)))
 
         # Loading the factors.
-        F = pd.read_csv(dataDir + '\\factors-20.csv')
+        F = pd.read_csv(os.path.join(dataDir,'factors-20.csv'))
         #F = F.drop(columns='Unnamed: 0')
         factorsNames = F.columns.drop('Date')
         # Loading the predictors.
-        Z = pd.read_csv(dataDir + '\\Z - 197706.csv')
+        Z = pd.read_csv(os.path.join(dataDir,'Z - 197706.csv'))
         Z = Z.drop(columns='Unnamed: 0')
 
     elif key_DataBase == DataBase.testAssets0_f20_m13:
@@ -3451,7 +3452,7 @@ if __name__ == '__main__':
         R = pd.DataFrame({'': []})
 
         # Loading the factors.
-        F = pd.read_csv(dataDir + '\\factors-20.csv')
+        F = pd.read_csv(os.path.join(dataDir,'factors-20.csv'))
         F = F.drop(columns=['MKTRF','SMB*','MKT','CON','IA', 'ROE', 'ME'])
         factorsNames = F.columns.drop('Date')
 
@@ -3460,7 +3461,7 @@ if __name__ == '__main__':
             F[name] = F[name].values * 100
 
         # Loading the predictors.
-        Z = pd.read_csv(dataDir + '\\Z - 197706.csv')
+        Z = pd.read_csv(os.path.join(dataDir,'Z - 197706.csv'))
         Z = Z.drop(columns='Unnamed: 0')
 
         assert len(Z) == len(F)
