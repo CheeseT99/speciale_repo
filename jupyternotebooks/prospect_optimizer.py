@@ -23,7 +23,7 @@ def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservati
     """
     # Calculate portfolio returns based on weights
     portfolio_returns = np.dot(r_s, weights) #Used to calculate expected returns
-    
+    # er mean return for hver måned ved første kørsel af minimizer (lige vægte)
 
     # Calculate zt based on these returns
     zt = calculate_zt(np.mean(portfolio_returns), r_tminus1)
@@ -50,6 +50,9 @@ def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservati
         
 
     return -prospect_value_sum / S  # Negative sign for maximization
+
+def prospect_value_BMA(weights, BMA_r_s, r_hat, lambda_, gamma=0.1):
+    return None
 
 def calculate_conservative_lambda(last_return, second_last_return, zt, lambda_=0.1):
     """
@@ -164,16 +167,13 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
         # Call the optimization function
         result = optimize_portfolio(r_s, r_hat, lambda_, strategy, gamma, r_tminus1, r_tminus2)
         weights = [round(weight, 4) for weight in result.x]
+        
         # Calculate the portfolio return for the exact next rebalancing period only
-
         rebalancing_end_date = (current_date + rebalancing_offset) - pd.Timedelta(days=1)
 
-        next_period_data = returns.loc[current_date:rebalancing_end_date]
-
-
+        next_period_data = returns.loc[returns.index[returns.index >= rebalancing_end_date].min()]
 
         # Calculate portfolio return if there is data within the period
-
         if not next_period_data.empty:
 
             portfolio_return = np.dot(next_period_data.mean(), weights)  # weighted average of returns why mean
@@ -207,9 +207,7 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
         current_date += rebalancing_offset
 
 
-
     # Create a DataFrame with results
-
     result_data = {
 
         'Portfolio Returns': portfolio_returns,

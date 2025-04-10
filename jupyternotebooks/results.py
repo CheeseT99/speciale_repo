@@ -9,6 +9,7 @@ import prospect_optimizer as po
 import os
 import sys
 import time
+import pickle as pkl
 
 toc = time.time()
 
@@ -31,7 +32,13 @@ returns = pd.read_csv(datapath, index_col='Date')
 # Factors ['Mkt-RF', 'HML', 'CMA', 'SMB', 'MMOM', 'RMW']
 # Predictors ['b.m', 'ep', 'de', 'ntis', 'dy', 'svar', 'dp']
 
+factors_path = os.path.join(parent_dir, "conditional_dump_models_MMax_7_OOS_new1.pkl")
+
+# Open and load the pickle file
+# with open(factors_path, 'rb') as file:
+#     data = pkl.load(file)
 # r_s = pd.read_csv(os.path.join(parent_dir, "data", "conditional_dump_models_MMax_7_OOS_new1.pkl"))  # Replace with actual path to your data
+
 
 # factors_result = po.optimize_portfolio(r_s, r_hat, lambda_, strategy)
 
