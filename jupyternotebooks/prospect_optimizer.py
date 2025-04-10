@@ -4,6 +4,7 @@ from scipy.optimize import minimize
 import pandas as pd
 import statsmodels.api as sm
 from scipy.stats import mannwhitneyu, levene, f_oneway
+import time
 
 def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservative", r_tminus1=0.0, r_tminus2=0.0):
     """
@@ -150,8 +151,12 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
             r_tminus1 = 0
             r_tminus2 = 0  # default to same value for simplicity
 
-        # reference return strategy: beat the market
+        # reference return strategy: beat the portfolio return
         r_hat = r_tminus1#returns.index[returns.index < current_date].max()]#returns.loc[previous_date, '10Y_Bond_Return'] #np.mean(portfolio_returns)returns.loc[previous_date, 'SPY']
+        
+        # reference return strategy: beat the market
+        #r_hat = returns.index[returns.index < current_date].max()
+        
         r_hat_values.append(r_hat)  # Store the current r_hat for the period
 
 
@@ -227,45 +232,67 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
 
     result_df = pd.DataFrame(result_data, index=rebalancing_dates[:len(portfolio_returns)])
 
-    
-
     return result_df
 
-
-
-
-
 def resultgenerator(lambda_values, gamma_values, returns):
-    aggressive_result_list = []
-    conservative_result_list = []
-    for i, lambdas in enumerate(lambda_values):
-        for j, gammas in enumerate(gamma_values):
-            # Create a unique name using lambda and gamma values
-            result_name_aggressive = f"aggressive_result_lambda{lambdas}_gamma{gammas}"
-            result_name_conservative = f"conservative_result_lambda{lambdas}_gamma{gammas}"
-            
-            # Run the backtest with the specified lambda and gamma values
-            aggressive_results = backtest_portfolio_adjusted(
-                returns, lookback_period='2Y', 
-                rebalancing_freq='1M', 
-                strategy="aggressive", 
-                lambda_=lambdas, 
-                gamma=gammas
-            )
-            conservative_results = backtest_portfolio_adjusted(
-                returns, lookback_period='2Y', 
-                rebalancing_freq='1M', 
-                strategy="conservative", 
-                lambda_=lambdas, 
-                gamma=gammas
-            )
-            
-            # Append the results with a unique name
-            aggressive_result_list.append({result_name_aggressive: aggressive_results})
-            conservative_result_list.append({result_name_conservative: conservative_results})
     
-    return aggressive_result_list, conservative_result_list
+    results_dict = {}
 
+    for lambdas in lambda_values:
+        print("lambda:", lambdas)
+        for gammas in gamma_values:
+            print("gamma:", gammas)  
+            for strategy in ["aggressive", "conservative"]:
+                # Create a unique name using lambda and gamma values
+                key = f"{strategy}_{lambdas}_{gammas}"
+                toc = time.time()
+                # Run the backtest for each unique set of (strategy, lambdas, gammas)
+                results = backtest_portfolio_adjusted(
+                    returns, lookback_period='2Y', 
+                    rebalancing_freq='1M', 
+                    strategy=strategy, 
+                    lambda_=lambdas, 
+                    gamma=gammas
+                )      
+                tic = time.time()
+                print(f"1 backtest: {(tic-toc):.2f}")
+
+                # Append to dict
+                results_dict[key] = results
+    
+    return results_dict
+
+### OLD:
+# def resultgenerator(lambda_values, gamma_values, returns):
+#     aggressive_result_list = []
+#     conservative_result_list = []
+#     for i, lambdas in enumerate(lambda_values):
+#         for j, gammas in enumerate(gamma_values):
+#             # Create a unique name using lambda and gamma values
+#             result_name_aggressive = f"aggressive_result_lambda{lambdas}_gamma{gammas}"
+#             result_name_conservative = f"conservative_result_lambda{lambdas}_gamma{gammas}"
+            
+#             # Run the backtest with the specified lambda and gamma values
+#             aggressive_results = backtest_portfolio_adjusted(
+#                 returns, lookback_period='2Y', 
+#                 rebalancing_freq='1M', 
+#                 strategy="aggressive", 
+#                 lambda_=lambdas, 
+#                 gamma=gammas
+#             )
+#             conservative_results = backtest_portfolio_adjusted(
+#                 returns, lookback_period='2Y', 
+#                 rebalancing_freq='1M', 
+#                 strategy="conservative", 
+#                 lambda_=lambdas, 
+#                 gamma=gammas
+#             )
+            
+#             # Append the results with a unique name
+#             aggressive_result_list.append({result_name_aggressive: aggressive_results})
+#             conservative_result_list.append({result_name_conservative: conservative_results})
+    
+#     return aggressive_result_list, conservative_result_list
 
 
 
