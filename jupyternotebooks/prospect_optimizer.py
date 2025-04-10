@@ -5,7 +5,7 @@ import pandas as pd
 import statsmodels.api as sm
 from scipy.stats import mannwhitneyu, levene, f_oneway
 
-def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservative"):
+def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservative", r_tminus1=0.0, r_tminus2=0.0):
     """
     Calculate the prospect value function with dynamic lambda for conservative or aggressive investors.
 
@@ -22,30 +22,25 @@ def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservati
     """
     # Calculate portfolio returns based on weights
     portfolio_returns = np.dot(r_s, weights) #Used to calculate expected returns
-
-    # Get last and second last returns from portfolio performance
-    last_return = portfolio_returns[-1]
-    
-    second_last_return = portfolio_returns[-2]
     
 
     # Calculate zt based on these returns
-    zt = calculate_zt(np.mean(portfolio_returns), last_return)
+    zt = calculate_zt(np.mean(portfolio_returns), r_tminus1)
 
     # Dynamically adjust lambda based on strategy and portfolio performance
     if strategy == "conservative":
-        lambda_dynamic = calculate_conservative_lambda(last_return, second_last_return, zt, lambda_)
+        lambda_dynamic = calculate_conservative_lambda(r_tminus1, r_tminus2, zt, lambda_)
     elif strategy == "aggressive":
-        lambda_dynamic = calculate_aggressive_lambda(last_return, second_last_return, zt, lambda_)
+        lambda_dynamic = calculate_aggressive_lambda(r_tminus1, r_tminus2, zt, lambda_)
     else:
         lambda_dynamic = lambda_
 
     # Calculate prospect value
-    S = len(r_s)  # Number of periods
+    S = len(r_s.index)  # Number of periods
     prospect_value_sum = 0
 
     for s in range(S):
-        r_sx = np.dot(r_s[s], weights)  # Portfolio return for time period s
+        r_sx = np.dot(r_s.iloc[s], weights)  # Portfolio return for time period s
         
         gain_term = max(0, r_sx - r_hat)
         loss_term = max(0, r_hat - r_sx)
@@ -79,8 +74,8 @@ def calculate_zt(expected_return, last_return):
     """
     return (1 + last_return) / (1 + expected_return)
 
-def optimize_portfolio(r_s, r_hat, lambda_, strategy="conservative", gamma=0.1):
-    num_assets = len(r_s[0])
+def optimize_portfolio(r_s, r_hat, lambda_, strategy="conservative", gamma=0.1, r_tminus1=0.0, r_tminus2=0.0):
+    num_assets = len(r_s.columns)
 
     initial_weights = np.ones(num_assets) / num_assets
 
@@ -134,7 +129,8 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
     # Start backtesting over the range of dates
     current_date = returns.index[0] + lookback_offset
     end_date = returns.index[-1]
-    while current_date <= end_date:
+
+    while current_date < end_date:
 
         # Define the lookback window
 
@@ -142,15 +138,17 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
 
         lookback_data = returns.loc[lookback_start:current_date]
         # Find the last available SPY return before `current_date`
-        previous_date = returns.index[returns.index < current_date].max()
-        #print(returns)
-        r_hat = returns.loc[previous_date, 'SPY']#returns.loc[previous_date, '10Y_Bond_Return'] #np.mean(portfolio_returns)returns.loc[previous_date, 'SPY']
-        r_hat_values.append(r_hat)  # Store the current r_hat for the period
-        # Convert lookback data to NumPy array
+        r_tminus1 = returns.index[returns.index < current_date].max()
+        r_tminus2 = returns.index[returns.index < r_tminus1].max()
 
-        r_s = np.array(lookback_data)
+        # reference return strategy: beat the market
+        r_hat = returns.loc[r_tminus1, 'SPY']#returns.loc[previous_date, '10Y_Bond_Return'] #np.mean(portfolio_returns)returns.loc[previous_date, 'SPY']
+        r_hat_values.append(r_hat)  # Store the current r_hat for the period
+
+
+        r_s = lookback_data
         # Call the optimization function
-        result = optimize_portfolio(r_s, r_hat, lambda_, strategy, gamma)
+        result = optimize_portfolio(r_s, r_hat, lambda_, strategy, gamma, r_tminus1, r_tminus2)
         weights = [round(weight, 4) for weight in result.x]
         # Calculate the portfolio return for the exact next rebalancing period only
 

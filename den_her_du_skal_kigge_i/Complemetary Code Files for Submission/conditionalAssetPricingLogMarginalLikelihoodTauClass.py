@@ -3388,8 +3388,8 @@ if __name__ == '__main__':
     dump_file_prefix = 'conditional_dump_models_MMax_'
 
     #key_start = Start.calculate_ML
-    key_start = Start.load_results_singles
-    #key_start = Start.predict_OOS
+    #key_start = Start.load_results_singles
+    key_start = Start.predict_OOS
     #key_start = Start.single_model_predict_OOS
     #key_start = Start.analyse_OOS
     #key_start = Start.summary_statistics
@@ -3399,12 +3399,12 @@ if __name__ == '__main__':
     #key_start = Start.calculate_spread
     #key_start = Start.calculate_spread_post_processing
 
-    key_DataBase = DataBase.testAssets80_f14_m13
-    #key_DataBase = DataBase.testAssets0_f20_m13
+    #key_DataBase = DataBase.testAssets80_f14_m13
+    key_DataBase = DataBase.testAssets0_f20_m13
 
     # Loading the input files.
     if key_DataBase == DataBase.testAssets80_f14_m13:
-        directory_name_prefix = homeDir + '\\conditionalTauDMN0F14M13s'
+        directory_name_prefix = os.path.join(homeDir,'conditionalTauDMN0F14M13s')
         significantPredictors = np.array([2,5,7,9,13]) ; significantPredictors -= 1
         significantPredictors = np.array([2])
         key_Avoid_duplicate_factors = True
@@ -3443,7 +3443,7 @@ if __name__ == '__main__':
 
         significantPredictors = np.array([1,4,9,11])
         # significantPredictors = np.array([])
-        significantPredictors = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+        significantPredictors = np.array([0, 1, 2, 3, 4, 5, 6])#, 7, 8, 9, 10, 11, 12])
 
         key_Avoid_duplicate_factors = False
 
@@ -3453,7 +3453,7 @@ if __name__ == '__main__':
 
         # Loading the factors.
         F = pd.read_csv(os.path.join(dataDir,'factors-20.csv'))
-        F = F.drop(columns=['MKTRF','SMB*','MKT','CON','IA', 'ROE', 'ME'])
+        F = F.drop(columns=['SMB*','MKT','IA', 'ROE', 'ME'])
         factorsNames = F.columns.drop('Date')
 
         # The factors in this input file are numbers and not percentage. Convert all the returns to percentage.
