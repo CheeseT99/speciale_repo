@@ -20,8 +20,8 @@ parent_dir = os.getcwd() # speciale_repo
 r_hat = 0.0  # Reference return
 lambda_ = 2  # Base loss aversion coefficient
 strategy = "conservative"  # You can switch between "aggressive" or "conservative"
-lambda_values = [1.5,1.75,1.99,2.25,2.5]
-gamma_values = [0.12,0.2,0.25,0.35,0.5]
+lambda_values = [1.99,2.25,2.5]
+gamma_values = [0.35,0.5]
 
 
 #Indlæser returnsdata

@@ -96,7 +96,7 @@ def optimize_portfolio(r_s, r_hat, lambda_, strategy="conservative", gamma=0.1, 
 
     # Now use COBYLA
     result = minimize(prospect_value, initial_weights, 
-                      args=(r_s, r_hat, lambda_, gamma, strategy),
+                      args=(r_s, r_hat, lambda_, gamma, strategy, r_tminus1, r_tminus2),
                       method='COBYLA', constraints=constraints,
                       options={'maxiter': 1000, 'tol': 1e-6})
 
@@ -130,7 +130,7 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
     current_date = returns.index[0] + lookback_offset
     end_date = returns.index[-1]
 
-    while current_date < end_date:
+    while current_date <= end_date:
 
         # Define the lookback window
 
@@ -138,11 +138,20 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
 
         lookback_data = returns.loc[lookback_start:current_date]
         # Find the last available SPY return before `current_date`
-        r_tminus1 = returns.index[returns.index < current_date].max()
-        r_tminus2 = returns.index[returns.index < r_tminus1].max()
+            # Define r_tminus1 and r_tminus2 based on previously calculated portfolio returns
+        if len(portfolio_returns) >= 2:
+            r_tminus1 = portfolio_returns[-1]
+            r_tminus2 = portfolio_returns[-2]
+        elif len(portfolio_returns) == 1:
+            r_tminus1 = portfolio_returns[-1]
+            r_tminus2 = 0  # or another sensible fallback
+        else:
+            # For the first calculation when no portfolio returns exist yet, fallback to a default
+            r_tminus1 = 0
+            r_tminus2 = 0  # default to same value for simplicity
 
         # reference return strategy: beat the market
-        r_hat = returns.loc[r_tminus1, 'SPY']#returns.loc[previous_date, '10Y_Bond_Return'] #np.mean(portfolio_returns)returns.loc[previous_date, 'SPY']
+        r_hat = r_tminus1#returns.index[returns.index < current_date].max()]#returns.loc[previous_date, '10Y_Bond_Return'] #np.mean(portfolio_returns)returns.loc[previous_date, 'SPY']
         r_hat_values.append(r_hat)  # Store the current r_hat for the period
 
 
@@ -162,7 +171,7 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
 
         if not next_period_data.empty:
 
-            portfolio_return = np.dot(next_period_data.mean(), weights)  # weighted average of returns
+            portfolio_return = np.dot(next_period_data.mean(), weights)  # weighted average of returns why mean
 
             portfolio_returns.append(portfolio_return)
 
