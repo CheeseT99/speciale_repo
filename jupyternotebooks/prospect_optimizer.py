@@ -171,12 +171,17 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
         # Calculate the portfolio return for the exact next rebalancing period only
         rebalancing_end_date = (current_date + rebalancing_offset) - pd.Timedelta(days=1)
 
-        next_period_data = returns.loc[returns.index[returns.index >= rebalancing_end_date].min()]
+        # Define next_period_data (in last period there is no next data):
+        if returns.index[returns.index >= rebalancing_end_date].empty:
+            next_period_data = pd.DataFrame()
+            #pd.Series([np.nan] * returns.shape[1], index = returns.columns)
+        else:
+            next_period_data = returns.loc[returns.index[returns.index >= rebalancing_end_date].min()]
 
         # Calculate portfolio return if there is data within the period
         if not next_period_data.empty:
 
-            portfolio_return = np.dot(next_period_data.mean(), weights)  # weighted average of returns why mean
+            portfolio_return = np.dot(next_period_data, weights)  # weighted average of returns why mean
 
             portfolio_returns.append(portfolio_return)
 
@@ -229,10 +234,13 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
     rebalancing_dates = returns.loc[returns.index[0] + lookback_offset:].resample(rebalancing_freq).first().index
 
     result_df = pd.DataFrame(result_data, index=rebalancing_dates[:len(portfolio_returns)])
+    
+    # Remove last row (redundant)
+    result_df = result_df.iloc[:-1]
 
     return result_df
 
-def resultgenerator(lambda_values, gamma_values, returns):
+def resultgenerator(lambda_values, gamma_values, returns, strategies):
     
     results_dict = {}
 
@@ -240,7 +248,7 @@ def resultgenerator(lambda_values, gamma_values, returns):
         print("lambda:", lambdas)
         for gammas in gamma_values:
             print("gamma:", gammas)  
-            for strategy in ["aggressive", "conservative"]:
+            for strategy in strategies:
                 # Create a unique name using lambda and gamma values
                 key = f"{strategy}_{lambdas}_{gammas}"
                 toc = time.time()

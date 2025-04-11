@@ -18,12 +18,20 @@ parent_dir = os.getcwd() # speciale_repo
 ### Input parameters
 r_hat = 0.0  # Reference return
 lambda_ = 2  # Base loss aversion coefficient
-strategy = ["conservative","aggressive"]  # You can switch between "aggressive" or "conservative"
+strategies = ["conservative","aggressive"]  # You can switch between "aggressive" or "conservative"
 lambda_values = [2.5]
 gamma_values = [0.5]
 
+# strategies = ["conservative","aggressive"]
+# lambda_values = [0.5, 1, 1.5, 2, 2.5]
+# gamma_values = [0.5, 0,75, 1, 1.25, 1.5]
+
 #Indlæser returnsdata
-datapath = os.path.join(parent_dir+'/data/returns_data.csv')
+#datapath = os.path.join(parent_dir+'/data/returns_data.csv')
+
+# Short data
+datapath = os.path.join(parent_dir+'/data/returns_data_short.csv')
+
 
 returns = pd.read_csv(datapath, index_col='Date')
 
@@ -43,12 +51,23 @@ factors_path = os.path.join(parent_dir, "conditional_dump_models_MMax_7_OOS_new1
 # factors_result = po.optimize_portfolio(r_s, r_hat, lambda_, strategy)
 
 
-returns_result = po.optimize_portfolio(returns, r_hat, lambda_, strategy)
+returns_result = po.optimize_portfolio(returns, r_hat, lambda_, strategies)
 print("Results are generating")
-results = po.resultgenerator(lambda_values, gamma_values, returns)
+results = po.resultgenerator(lambda_values, gamma_values, returns, strategies)
 print("Done")
-aggressive_results =results[0]
-conservative_results = results[1]
+
+
+
+# Create returns_conservative
+returns_conservative = {
+    key: value for key, value in results.items() if "conservative" in key
+}
+
+# Create returns_aggressive
+returns_aggressive = {
+    key: value for key, value in results.items() if "aggressive" in key
+}
+
 
 
 
