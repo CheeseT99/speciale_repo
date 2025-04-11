@@ -4,8 +4,11 @@ from scipy.optimize import minimize
 import pandas as pd
 import statsmodels.api as sm
 from scipy.stats import mannwhitneyu, levene, f_oneway
+from conditionalAssetPricingLogMarginalLikelihoodTauClass import Model, printFactorsAndPredictorsProbabilities
 
-def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservative"):
+import time
+
+def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservative", r_tminus1=0.0, r_tminus2=0.0):
     """
     Calculate the prospect value function with dynamic lambda for conservative or aggressive investors.
 
@@ -22,30 +25,25 @@ def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservati
     """
     # Calculate portfolio returns based on weights
     portfolio_returns = np.dot(r_s, weights) #Used to calculate expected returns
-
-    # Get last and second last returns from portfolio performance
-    last_return = portfolio_returns[-1]
-    
-    second_last_return = portfolio_returns[-2]
-    
+    # er mean return for hver måned ved første kørsel af minimizer (lige vægte)
 
     # Calculate zt based on these returns
-    zt = calculate_zt(np.mean(portfolio_returns), last_return)
+    zt = calculate_zt(np.mean(portfolio_returns), r_tminus1)
 
     # Dynamically adjust lambda based on strategy and portfolio performance
     if strategy == "conservative":
-        lambda_dynamic = calculate_conservative_lambda(last_return, second_last_return, zt, lambda_)
+        lambda_dynamic = calculate_conservative_lambda(r_tminus1, r_tminus2, zt, lambda_)
     elif strategy == "aggressive":
-        lambda_dynamic = calculate_aggressive_lambda(last_return, second_last_return, zt, lambda_)
+        lambda_dynamic = calculate_aggressive_lambda(r_tminus1, r_tminus2, zt, lambda_)
     else:
         lambda_dynamic = lambda_
 
     # Calculate prospect value
-    S = len(r_s)  # Number of periods
+    S = len(r_s.index)  # Number of periods
     prospect_value_sum = 0
 
     for s in range(S):
-        r_sx = np.dot(r_s[s], weights)  # Portfolio return for time period s
+        r_sx = np.dot(r_s.iloc[s], weights)  # Portfolio return for time period s
         
         gain_term = max(0, r_sx - r_hat)
         loss_term = max(0, r_hat - r_sx)
@@ -54,6 +52,51 @@ def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservati
         
 
     return -prospect_value_sum / S  # Negative sign for maximization
+
+def prospect_value_BMA(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservative", r_tminus1=0.0, r_tminus2=0.0):
+    """
+    Calculate the prospect value function with dynamic lambda for conservative or aggressive investors.
+
+    Parameters:
+    weights (array): The weights for each asset in the portfolio.
+    r_s (array): The returns of each asset.
+    r_hat (float): The reference return.
+    lambda_ (float): The base loss aversion sensitivity coefficient.
+    gamma (float): The risk aversion coefficient (default is 0.1).
+    strategy (str): The risk strategy of the investor ('conservative' or 'aggressive').
+
+    Returns:
+    float: The prospect value.
+    """
+    # Calculate portfolio returns based on weights
+    portfolio_returns = np.dot(r_s, weights) #Used to calculate expected returns
+    # er mean return for hver måned ved første kørsel af minimizer (lige vægte)
+
+    # Calculate zt based on these returns
+    zt = calculate_zt(np.mean(portfolio_returns), r_tminus1)
+
+    # Dynamically adjust lambda based on strategy and portfolio performance
+    if strategy == "conservative":
+        lambda_dynamic = calculate_conservative_lambda(r_tminus1, r_tminus2, zt, lambda_)
+    elif strategy == "aggressive":
+        lambda_dynamic = calculate_aggressive_lambda(r_tminus1, r_tminus2, zt, lambda_)
+    else:
+        lambda_dynamic = lambda_
+
+    # Calculate prospect value
+    #S = len(r_s.index)  # Number of periods
+    prospect_value_sum = 0
+
+    
+    r_sx = np.dot(r_s, weights)  # Portfolio return for time period s
+        
+    gain_term = max(0, r_sx - r_hat)
+    loss_term = max(0, r_hat - r_sx)
+
+    prospect_value_sum += (gain_term ** (1 - gamma)) / (1 - gamma) - lambda_dynamic * (loss_term ** (1 - gamma)) / (1 - gamma)
+        
+
+    return -prospect_value_sum  # Negative sign for maximization
 
 def calculate_conservative_lambda(last_return, second_last_return, zt, lambda_=0.1):
     """
@@ -79,8 +122,8 @@ def calculate_zt(expected_return, last_return):
     """
     return (1 + last_return) / (1 + expected_return)
 
-def optimize_portfolio(r_s, r_hat, lambda_, strategy="conservative", gamma=0.1):
-    num_assets = len(r_s[0])
+def optimize_portfolio(r_s, r_hat, lambda_, strategy="conservative", gamma=0.1, r_tminus1=0.0, r_tminus2=0.0):
+    num_assets = len(r_s)
 
     initial_weights = np.ones(num_assets) / num_assets
 
@@ -100,15 +143,76 @@ def optimize_portfolio(r_s, r_hat, lambda_, strategy="conservative", gamma=0.1):
         constraints.append({'type': 'ineq', 'fun': lambda x, i=i: 1 - x[i]})
 
     # Now use COBYLA
-    result = minimize(prospect_value, initial_weights, 
-                      args=(r_s, r_hat, lambda_, gamma, strategy),
+    result = minimize(prospect_value_BMA, initial_weights, 
+                      args=(r_s, r_hat, lambda_, gamma, strategy, r_tminus1, r_tminus2),
                       method='COBYLA', constraints=constraints,
                       options={'maxiter': 1000, 'tol': 1e-6})
 
     return result
 
+#Data skal være renset og rigtige datolængde
+def calculate_bma_returns(rr , ff, zz, tau):
+    index_of_estimation = len(ff)-10
+    n_predictors_to_use = 2
+    significantPredictors = np.arange(n_predictors_to_use)
+    # === Step 1: Instantiate model ===
+    model = Model(rr=pd.DataFrame({'': []}),#,returns_reset,
+                ff=ff,
+                zz=zz,
+                significantPredictors=significantPredictors,
+                Tau=tau,
+                indexEndOfEstimation=index_of_estimation,
+                key_demean_predictors=True)
+    # === Step 2: Calculate marginal likelihood ===
+    CLMLList = []
+    (CLMLU, factorsNames, factorsProbabilityU, predictorsNames, predictorsProbabilityU, \
+                        T0IncreasedFraction, T0Max, T0Min, T0Avg, T0_div_T0_plus_TAvg, T_div_T0_plus_TAvg, \
+                        CLMLR, factorsProbabilityR, predictorsProbabilityR) = \
+                            model.conditionalAssetPricingLogMarginalLikelihoodTauNumba()
+
+    CLMLCombined = np.concatenate((CLMLU, CLMLR), axis=0)
+    CMLCombined  = np.exp(CLMLCombined - max(CLMLCombined)); CMLCombined = CMLCombined / np.sum(CMLCombined)
+
+
+    # === Step 3: Calculate posterior probabilities, Maybe? ===
+    factorsProbability = np.sum(CMLCombined[0:len(CLMLU)])*factorsProbabilityU + np.sum(CMLCombined[len(CLMLU): ]) *factorsProbabilityR
+    predictorsProbability = np.sum(CMLCombined[0:len(CLMLU)])*predictorsProbabilityU + np.sum(CMLCombined[len(CLMLU): ]) *predictorsProbabilityR
+    CLMLList.append({"Tau": tau,     \
+                            "LMLU" : CLMLU, "LMLR" :CLMLR,  \
+                            "factorsProbability"    : factorsProbability,    \
+                            "predictorsProbability" : predictorsProbability, \
+                            "T0IncreasedFraction" : T0IncreasedFraction,     \
+                            "T0Max" : T0Max, "T0Min" : T0Min, "T0Avg" : T0Avg,   \
+                            "T0divT0plusTAvg" : T0_div_T0_plus_TAvg, "TdivT0plusTAvg" : T_div_T0_plus_TAvg, \
+                            "MisprisingProb" : np.sum(CMLCombined[0: len(CLMLU)])})
+    CLMLU = CLMLList[0]["LMLU"]
+    CLMLR = CLMLList[0]["LMLR"]
+    CLMLCombined = np.concatenate((CLMLU, CLMLR), axis=0)
+    CMLCombined  = np.exp(CLMLCombined - max(CLMLCombined)); CMLCombined = CMLCombined / np.sum(CMLCombined)
+    print('probability of mispricing    = %f' %(np.sum(CMLCombined[0: len(CLMLU)])))
+    print('probability of no mispricing = %f' %(np.sum(CMLCombined[len(CLMLU):  ])))
+    factorsProbability = CLMLList[0]["factorsProbability"]
+    predictorsProbability = CLMLList[0]["predictorsProbability"]
+    # step 4: Calculate the returns
+    nModelsInPrediction = 1000
+    (returns_OOS , returns_square_OOS, returns_interactions_OOS, \
+                            covariance_matrix_OOS, covariance_matrix_no_ER_OOS, \
+                            returns_IN, returns_square_IN, returns_interactions_IN, \
+                            covariance_matrix_IN, covariance_matrix_no_ER_IN, \
+                            cumulative_probability) = \
+                            model.conditionalAssetPricingOOSTauNumba(CMLCombined,nModelsInPrediction)
+    return(returns_OOS[0])
+
+
+
+
+
 
 # Adjusted backtest function to ensure each rebalancing period is restricted to one month only
+
+
+
+
 
 
 
@@ -134,6 +238,7 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
     # Start backtesting over the range of dates
     current_date = returns.index[0] + lookback_offset
     end_date = returns.index[-1]
+
     while current_date <= end_date:
 
         # Define the lookback window
@@ -142,29 +247,46 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
 
         lookback_data = returns.loc[lookback_start:current_date]
         # Find the last available SPY return before `current_date`
-        previous_date = returns.index[returns.index < current_date].max()
-        #print(returns)
-        r_hat = returns.loc[previous_date, 'SPY']#returns.loc[previous_date, '10Y_Bond_Return'] #np.mean(portfolio_returns)returns.loc[previous_date, 'SPY']
+            # Define r_tminus1 and r_tminus2 based on previously calculated portfolio returns
+        if len(portfolio_returns) >= 2:
+            r_tminus1 = portfolio_returns[-1]
+            r_tminus2 = portfolio_returns[-2]
+        elif len(portfolio_returns) == 1:
+            r_tminus1 = portfolio_returns[-1]
+            r_tminus2 = 0  # or another sensible fallback
+        else:
+            # For the first calculation when no portfolio returns exist yet, fallback to a default
+            r_tminus1 = 0
+            r_tminus2 = 0  # default to same value for simplicity
+
+        # reference return strategy: beat the portfolio return
+        r_hat = r_tminus1#returns.index[returns.index < current_date].max()]#returns.loc[previous_date, '10Y_Bond_Return'] #np.mean(portfolio_returns)returns.loc[previous_date, 'SPY']
+        
+        # reference return strategy: beat the market
+        #r_hat = returns.index[returns.index < current_date].max()
+        
         r_hat_values.append(r_hat)  # Store the current r_hat for the period
-        # Convert lookback data to NumPy array
 
-        r_s = np.array(lookback_data)
+
+        r_s = lookback_data
         # Call the optimization function
-        result = optimize_portfolio(r_s, r_hat, lambda_, strategy, gamma)
+        result = optimize_portfolio(r_s, r_hat, lambda_, strategy, gamma, r_tminus1, r_tminus2)
         weights = [round(weight, 4) for weight in result.x]
+        
         # Calculate the portfolio return for the exact next rebalancing period only
-
         rebalancing_end_date = (current_date + rebalancing_offset) - pd.Timedelta(days=1)
 
-        next_period_data = returns.loc[current_date:rebalancing_end_date]
-
-
+        # Define next_period_data (in last period there is no next data):
+        if returns.index[returns.index >= rebalancing_end_date].empty:
+            next_period_data = pd.DataFrame()
+            #pd.Series([np.nan] * returns.shape[1], index = returns.columns)
+        else:
+            next_period_data = returns.loc[returns.index[returns.index >= rebalancing_end_date].min()]
 
         # Calculate portfolio return if there is data within the period
-
         if not next_period_data.empty:
 
-            portfolio_return = np.dot(next_period_data.mean(), weights)  # weighted average of returns
+            portfolio_return = np.dot(next_period_data, weights)  # weighted average of returns why mean
 
             portfolio_returns.append(portfolio_return)
 
@@ -195,9 +317,7 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
         current_date += rebalancing_offset
 
 
-
     # Create a DataFrame with results
-
     result_data = {
 
         'Portfolio Returns': portfolio_returns,
@@ -219,46 +339,71 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
     rebalancing_dates = returns.loc[returns.index[0] + lookback_offset:].resample(rebalancing_freq).first().index
 
     result_df = pd.DataFrame(result_data, index=rebalancing_dates[:len(portfolio_returns)])
-
     
+    # Remove last row (redundant)
+    result_df = result_df.iloc[:-1]
 
     return result_df
 
-
-
-
-
-def resultgenerator(lambda_values, gamma_values, returns):
-    aggressive_result_list = []
-    conservative_result_list = []
-    for i, lambdas in enumerate(lambda_values):
-        for j, gammas in enumerate(gamma_values):
-            # Create a unique name using lambda and gamma values
-            result_name_aggressive = f"aggressive_result_lambda{lambdas}_gamma{gammas}"
-            result_name_conservative = f"conservative_result_lambda{lambdas}_gamma{gammas}"
-            
-            # Run the backtest with the specified lambda and gamma values
-            aggressive_results = backtest_portfolio_adjusted(
-                returns, lookback_period='2Y', 
-                rebalancing_freq='1M', 
-                strategy="aggressive", 
-                lambda_=lambdas, 
-                gamma=gammas
-            )
-            conservative_results = backtest_portfolio_adjusted(
-                returns, lookback_period='2Y', 
-                rebalancing_freq='1M', 
-                strategy="conservative", 
-                lambda_=lambdas, 
-                gamma=gammas
-            )
-            
-            # Append the results with a unique name
-            aggressive_result_list.append({result_name_aggressive: aggressive_results})
-            conservative_result_list.append({result_name_conservative: conservative_results})
+def resultgenerator(lambda_values, gamma_values, returns, strategies):
     
-    return aggressive_result_list, conservative_result_list
+    results_dict = {}
 
+    for lambdas in lambda_values:
+        print("lambda:", lambdas)
+        for gammas in gamma_values:
+            print("gamma:", gammas)  
+            for strategy in strategies:
+                # Create a unique name using lambda and gamma values
+                key = f"{strategy}_{lambdas}_{gammas}"
+                toc = time.time()
+                # Run the backtest for each unique set of (strategy, lambdas, gammas)
+                results = backtest_portfolio_adjusted(
+                    returns, lookback_period='2Y', 
+                    rebalancing_freq='1M', 
+                    strategy=strategy, 
+                    lambda_=lambdas, 
+                    gamma=gammas
+                )      
+                tic = time.time()
+                print(f"1 backtest: {(tic-toc):.2f}")
+
+                # Append to dict
+                results_dict[key] = results
+    
+    return results_dict
+
+### OLD:
+# def resultgenerator(lambda_values, gamma_values, returns):
+#     aggressive_result_list = []
+#     conservative_result_list = []
+#     for i, lambdas in enumerate(lambda_values):
+#         for j, gammas in enumerate(gamma_values):
+#             # Create a unique name using lambda and gamma values
+#             result_name_aggressive = f"aggressive_result_lambda{lambdas}_gamma{gammas}"
+#             result_name_conservative = f"conservative_result_lambda{lambdas}_gamma{gammas}"
+            
+#             # Run the backtest with the specified lambda and gamma values
+#             aggressive_results = backtest_portfolio_adjusted(
+#                 returns, lookback_period='2Y', 
+#                 rebalancing_freq='1M', 
+#                 strategy="aggressive", 
+#                 lambda_=lambdas, 
+#                 gamma=gammas
+#             )
+#             conservative_results = backtest_portfolio_adjusted(
+#                 returns, lookback_period='2Y', 
+#                 rebalancing_freq='1M', 
+#                 strategy="conservative", 
+#                 lambda_=lambdas, 
+#                 gamma=gammas
+#             )
+            
+#             # Append the results with a unique name
+#             aggressive_result_list.append({result_name_aggressive: aggressive_results})
+#             conservative_result_list.append({result_name_conservative: conservative_results})
+    
+#     return aggressive_result_list, conservative_result_list
 
 
 
