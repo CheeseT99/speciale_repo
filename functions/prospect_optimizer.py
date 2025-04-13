@@ -39,11 +39,11 @@ def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservati
         lambda_dynamic = lambda_
 
     # Calculate prospect value
-    S = len(r_s.index)  # Number of periods
+    S = len(r_s)  # Number of periods
     prospect_value_sum = 0
 
     for s in range(S):
-        r_sx = np.dot(r_s.iloc[s], weights)  # Portfolio return for time period s
+        r_sx = np.dot(r_s[s], weights)  # Portfolio return for time period s
         
         gain_term = max(0, r_sx - r_hat)
         loss_term = max(0, r_hat - r_sx)
@@ -123,7 +123,7 @@ def calculate_zt(expected_return, last_return):
     return (1 + last_return) / (1 + expected_return)
 
 def optimize_portfolio(r_s, r_hat, lambda_, strategy="conservative", gamma=0.1, r_tminus1=0.0, r_tminus2=0.0):
-    num_assets = len(r_s)
+    num_assets = len(r_s.T)  # Number of assets in the portfolio
 
     initial_weights = np.ones(num_assets) / num_assets
 
@@ -143,7 +143,7 @@ def optimize_portfolio(r_s, r_hat, lambda_, strategy="conservative", gamma=0.1, 
         constraints.append({'type': 'ineq', 'fun': lambda x, i=i: 1 - x[i]})
 
     # Now use COBYLA
-    result = minimize(prospect_value_BMA, initial_weights, 
+    result = minimize(prospect_value, initial_weights, 
                       args=(r_s, r_hat, lambda_, gamma, strategy, r_tminus1, r_tminus2),
                       method='COBYLA', constraints=constraints,
                       options={'maxiter': 1000, 'tol': 1e-6})
@@ -151,7 +151,7 @@ def optimize_portfolio(r_s, r_hat, lambda_, strategy="conservative", gamma=0.1, 
     return result
 
 #Data skal være renset og rigtige datolængde
-def calculate_bma_returns(rr , ff, zz, tau):
+def calculate_bma_returns(rr , ff, zz, tau, number_of_sim = 1000):
     index_of_estimation = len(ff)-10
     n_predictors_to_use = 2
     significantPredictors = np.arange(n_predictors_to_use)
@@ -201,7 +201,17 @@ def calculate_bma_returns(rr , ff, zz, tau):
                             covariance_matrix_IN, covariance_matrix_no_ER_IN, \
                             cumulative_probability) = \
                             model.conditionalAssetPricingOOSTauNumba(CMLCombined,nModelsInPrediction)
-    return(returns_OOS[0])
+    predicted_means = returns_OOS[0]               # Shape (14,)
+    predicted_covariance = covariance_matrix_OOS[0] 
+    num_simulations = 10000
+    simulated_returns = np.random.multivariate_normal(
+        predicted_means,
+        predicted_covariance,
+        num_simulations
+    ) # shape (10000, 14)
+
+
+    return(simulated_returns)
 
 
 
