@@ -118,6 +118,7 @@ def plot_best_strategy_vs_market(
 
     return file_path
 
+
 def plot_best_and_worst_strategy_vs_market(
     summary_df: pd.DataFrame,
     results_dict: dict,
@@ -183,8 +184,6 @@ def plot_best_and_worst_strategy_vs_market(
     return file_path
 
 
-
-
 def plot_all_heatmaps(summary_df: pd.DataFrame, metrics: list[str], parent_dir='./') -> list[str]:
     """
     Generates and saves heatmaps for multiple performance metrics across (λ, γ) per strategy.
@@ -229,3 +228,118 @@ def plot_all_heatmaps(summary_df: pd.DataFrame, metrics: list[str], parent_dir='
             saved_paths.append(save_path)
 
     return saved_paths
+
+
+
+def plot_certainty_equivalent_heatmap(ce_df: pd.DataFrame, parent_dir: str) -> str:
+    """
+    Plots a heatmap of Certainty Equivalent across (λ, γ) grid.
+
+    Args:
+        ce_df (pd.DataFrame): Output from compute_certainty_equivalents()
+        parent_dir (str): Path to your project root for saving the plot
+
+    Returns:
+        str: File path to saved heatmap
+    """
+    # Pivot to matrix: rows = Lambda, columns = Gamma
+    pivot = ce_df.reset_index().pivot_table(
+        index='Lambda',
+        columns='Gamma',
+        values='Certainty Equivalent'
+    ).sort_index(ascending=True)
+
+    # Plot setup
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(pivot, annot=True, fmt=".4f", cmap="YlGnBu", cbar_kws={"label": "Certainty Equivalent"})
+    plt.title("Certainty Equivalent Utility — (λ, γ) Grid")
+    plt.xlabel("Gamma (Risk Aversion)")
+    plt.ylabel("Lambda (Loss Aversion)")
+    plt.tight_layout()
+
+    # Save
+    plots_dir = os.path.join(parent_dir, "plots")
+    os.makedirs(plots_dir, exist_ok=True)
+    file_path = os.path.join(plots_dir, "certainty_equivalent_heatmap.png")
+    plt.savefig(file_path)
+    plt.close()
+
+    return file_path
+
+
+def plot_certainty_equivalent_comparison(ce_df: pd.DataFrame, methods=('BMA', 'Historical Mean', 'MVP'), save_path: str = None):
+    """
+    Plots Certainty Equivalent comparison across methods for each strategy.
+
+    Args:
+        ce_df: DataFrame with columns ['Strategy_Key', 'Strategy', 'Lambda', 'Gamma', 'Method', 'Certainty Equivalent']
+        methods: list of method names to include (must match 'Method' column)
+        save_path: optional path to save figure
+    """
+    # Filter for relevant methods
+    ce_filtered = ce_df[ce_df['Method'].isin(methods)]
+
+    # Set up plot
+    plt.figure(figsize=(12, 6))
+    sns.barplot(
+        data=ce_filtered,
+        x='Strategy_Key',
+        y='Certainty Equivalent',
+        hue='Method',
+        dodge=True
+    )
+
+    plt.xticks(rotation=90)
+    plt.xlabel("Strategy (Lambda, Gamma)")
+    plt.ylabel("Certainty Equivalent")
+    plt.title("Certainty Equivalent Comparison Across Methods")
+    plt.grid(True)
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path)
+        print(f"✅ Saved plot to {save_path}")
+    else:
+        plt.show()
+
+
+
+def plot_ce_and_sharpe_comparison(merged_df: pd.DataFrame, save_path: str = None):
+    """
+    Creates a side-by-side barplot of Certainty Equivalent and Sharpe Ratio across methods.
+
+    Args:
+        merged_df: DataFrame containing 'Method', 'Certainty Equivalent', and 'Sharpe Ratio'.
+        save_path: optional path to save the plot.
+    """
+
+    # Group by Method and calculate mean CE and Sharpe
+    ce_by_method = merged_df.groupby('Method')['Certainty Equivalent'].mean()
+    sharpe_by_method = merged_df.groupby('Method')['Sharpe Ratio'].mean()
+
+    methods = ce_by_method.index.tolist()
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+    # === Left: Certainty Equivalent
+    sns.barplot(x=ce_by_method.values, y=methods, ax=axes[0], orient='h', palette="Blues_d")
+    axes[0].set_title("Average Certainty Equivalent by Method")
+    axes[0].set_xlabel("Certainty Equivalent")
+    axes[0].set_ylabel("Method")
+    axes[0].grid(True)
+
+    # === Right: Sharpe Ratio
+    sns.barplot(x=sharpe_by_method.values, y=methods, ax=axes[1], orient='h', palette="Greens_d")
+    axes[1].set_title("Average Sharpe Ratio by Method")
+    axes[1].set_xlabel("Sharpe Ratio")
+    axes[1].set_ylabel("")
+
+    axes[1].grid(True)
+
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path)
+        print(f"✅ Saved plot to: {save_path}")
+    else:
+        plt.show()

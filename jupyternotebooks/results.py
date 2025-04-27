@@ -17,6 +17,8 @@ import statsmodels.api as sm
 from scipy.stats import mannwhitneyu, levene, f_oneway
 import prospect_optimizer as po
 import visualisation as vis
+import weight_analysis as wa
+import evaluation as ev
 
 import pickle as pkl
 
@@ -56,36 +58,150 @@ date_tag = f"{start_date}_{end_date}"
 bma_returns = po.rolling_bma_returns(parent_dir, n_predictors_to_use=2, start_date=start_date, end_date=end_date)
 tic = time.time()
 print(f"Elapsed time: {(tic-toc):.2f}")
+# Example to access a selected key: bma_returns[pd.Timestamp('2007-12-01')]
 
-# # Check if the file exists
-# if os.path.exists(bma_pickle_path):
-#     print("BMA File exists, loading data from pickle.")
-#     # Load the data from the pickle file
-#     with open(bma_pickle_path, 'rb') as file:
-#         bma_returns = pkl.load(file)
-# else:
-#     pass
 
-# bma_returns = po.rolling_bma_returns(parent_dir, n_predictors_to_use, start_date, end_date, min_obs=120, tau = 1.1)
+# Cache folder
+cache_dir = "./bma_cache"
 
-#bma_returns = po.initialize_bma_returns(bma_pickle_path, parent_dir, n_predictors_to_use, start_date, end_date)
-
-results_dict = po.resultgenerator_bma(
+results_dict_bma = po.resultgenerator_bma(
     lambda_values=lambda_values,
     gamma_values=gamma_values,
     bma_returns=bma_returns,
     strategies=strategies,
+    date_tag=date_tag,
+    cache_dir=cache_dir
+)
+# Keys in results_dict are tuples of (strategy, lambda, gamma)
+# Example to extract a single strategy result: summary_df['conservative_1.5_0.12']
+
+summary_df = po.summarize_backtest_results(results_dict_bma)
+print(summary_df.head(10))  # top 10 strategies by Sharpe
+
+# You can now compute CE as usual:
+ce_df = ev.compute_certainty_equivalents(results_dict_bma)
+
+
+historical_returns = po.load_historical_returns(
+    parent_dir=parent_dir,
+    start_date=start_date,
+    end_date=end_date
+)
+
+print(historical_returns.head())
+
+
+# Historical Mean
+results_dict_historical_mean = po.resultgenerator_historical_mean(
+    lambda_values=lambda_values,
+    gamma_values=gamma_values,
+    historical_returns=historical_returns,
+    strategies=strategies,
     date_tag=date_tag
 )
 
-summary_df = po.summarize_backtest_results(results_dict)
-print(summary_df.head(10))  # top 10 strategies by Sharpe
+# MVP
+results_dict_mvp = po.resultgenerator_mvp(
+    lambda_values=lambda_values,
+    gamma_values=gamma_values,
+    historical_returns=historical_returns,
+    strategies=strategies,
+    date_tag=date_tag
+)
 
+# Fama-French model
+# Load data
+
+test_assets_returns, factor_returns = po.load_test_assets_and_factors(
+    parent_dir=parent_dir,
+    start_date=start_date,
+    end_date=end_date
+)
+
+
+# Slice matched time period
+aligned_returns = test_assets_returns.join(factor_returns, how="inner")
+
+# # Estimate expected returns
+# fama_french_returns = po.estimate_factor_model_expected_returns(
+#     asset_returns=aligned_returns[test_assets_returns.columns],
+#     factor_returns=aligned_returns[factor_returns.columns],
+#     lookback_window=120
+# )
+
+# print(fama_french_returns)
+
+results_dict_factor_model = po.resultgenerator_factor_model(
+    lambda_values=lambda_values,
+    gamma_values=gamma_values,
+    test_assets_returns=test_assets_returns,
+    factor_returns=factor_returns,
+    strategies=strategies,
+    date_tag=date_tag
+)
+
+
+### DYNAMIC REFERENCE RETURNS:
+
+# Load reference returns: MKT-RF, and SPY
+# market_returns = po.load_reference_returns(parent_dir, ref_type="market")
+# spy_returns = po.load_reference_returns(parent_dir, ref_type="spy")
+
+
+# reference_rule = "market_return"  # or 'spy_returns', 'prev_portfolio', 'fixed_zero', 'rolling_avg'
+
+
+# # Run across all reference rules
+# results_by_reference = po.evaluate_reference_robustness(
+#     lambda_values=lambda_values,
+#     gamma_values=gamma_values,
+#     bma_returns=bma_returns,
+#     strategies=strategies,
+#     date_tag=date_tag,
+#     parent_dir=parent_dir
+# )
+
+# # Then extract the one you want to work with:
+# results_dict = results_by_reference["market_return"]
+
+# summary_all_refs = []
+
+# for ref_rule, results_dict in results_by_reference.items():
+#     summary_df = po.summarize_backtest_results(results_dict)
+#     summary_df["Reference_Rule"] = ref_rule  # Add column to track source
+#     summary_all_refs.append(summary_df.reset_index())
+
+# # Combine into a single DataFrame
+# summary_combined = pd.concat(summary_all_refs).set_index("Strategy_Key")
+
+results_by_method = {
+    "BMA": results_dict_bma,
+    "Historical Mean": results_dict_historical_mean,
+    "MVP": results_dict_mvp,
+    "FF Model": results_dict_factor_model
+}
+comparison_df = po.compare_methods(results_by_method)
+print(comparison_df.head())
+
+ce_combined_df = ev.compare_certainty_equivalents(results_by_method, reference=0.0)
+print(ce_combined_df.head())
+
+comparison_df = ev.merge_ce_and_performance(ce_combined_df, comparison_df)
+print(comparison_df.head())
+vis.plot_ce_and_sharpe_comparison(comparison_df, save_path="./plots/ce_sharpe_comparison.png")
+
+
+summary_ce_df = ev.summarize_certainty_equivalents(ce_combined_df)
+
+print(summary_ce_df)
+
+
+## Plots
 
 market = po.load_market_benchmark(parent_dir, start_date=start_date, end_date=end_date)
 
 plot_strats_vs_market = vis.plot_strategies_vs_market(
-    summary_dict=results_dict,
+    summary_dict=results_dict_bma,
     market_cumulative=market,
     parent_dir=parent_dir
 )
@@ -94,7 +210,7 @@ print(f"Plot saved to: {plot_strats_vs_market}")
 
 best_strat = vis.plot_best_strategy_vs_market(
     summary_df=summary_df,
-    results_dict=results_dict,
+    results_dict=results_dict_bma,
     market_cumulative=market,
     parent_dir=parent_dir,
     metric="Sharpe Ratio"  # or "Final Wealth"
@@ -104,7 +220,7 @@ print(f"📈 Saved best strategy vs market plot: {best_strat}")
 
 plot_best_vs_worst_strat = vis.plot_best_and_worst_strategy_vs_market(
     summary_df=summary_df,
-    results_dict=results_dict,
+    results_dict=results_dict_bma,
     market_cumulative=market,
     parent_dir=parent_dir,
     metric="Sharpe Ratio"  # or "Final Wealth"
@@ -123,6 +239,46 @@ plot_paths = vis.plot_all_heatmaps(
 print("📊 All heatmaps saved:")
 for path in plot_paths:
     print(f" - {path}")
+
+
+avg_weights = wa.average_weights(results_dict_bma)
+vol_turnover = wa.weight_volatility_and_turnover(results_dict_bma)
+heatmap_paths = wa.save_weight_heatmaps(results_dict_bma, parent_dir)
+top_holdings = wa.top_assets_per_strategy(results_dict_bma)
+hhi_df, pivot_cons, pivot_agg = wa.herfindahl_index(results_dict_bma)
+wa.save_hhi_heatmaps(pivot_cons, pivot_agg, parent_dir)
+
+print("📊 Per-strategy summary:")
+print(hhi_df.head())
+
+print("\n📈 Avg HHI — Conservative:")
+print(pivot_cons)
+
+print("\n📈 Avg HHI — Aggressive:")
+print(pivot_agg)
+
+plot_path = wa.plot_sharpe_vs_hhi(summary_df, hhi_df, parent_dir)
+print(f"📈 Sharpe vs HHI plot saved to: {plot_path}")
+
+# Step 1: Compute CE values
+ce_df = ev.compute_certainty_equivalents(results_dict_bma, reference=0.0)
+
+# Step 2: Plot heatmap
+plot_path = vis.plot_certainty_equivalent_heatmap(ce_df, parent_dir)
+
+# Step 2: View top-performing strategies by CE
+print(ce_df.head())
+
+
+vis.plot_certainty_equivalent_comparison(
+    ce_df=ce_combined_df,
+    methods=['BMA', 'Historical Mean', 'MVP'],
+    save_path="./plots/ce_comparison_barplot.png"
+)
+
+
+
+breakpoint = 1
 
 # final_value = results_df['Compounded Returns'].iloc[-1]
 # sr = results_df['Portfolio Returns'].mean() / results_df['Portfolio Returns'].std()
