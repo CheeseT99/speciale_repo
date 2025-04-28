@@ -646,24 +646,12 @@ class Model:
                         ZOrig.loc[indexEndOfEstimation  : len(ZOrig) -2 , self.predictorsNames].values))
 
         # Demeaning the predictors in the estimation sample.
-        print('ZEstimation mean and std')
         self.ZEstimationMean = np.mean(self.ZEstimation,0)
         self.ZEstimationStd  = np.std(self.ZEstimation, 0)
-        print(self.ZEstimationMean)
-        print(self.ZEstimationStd )
-        print('ZTest mean and std')
-        print(np.mean(self.ZTest, 0))
-        print(np.std(self.ZTest, 0))
+
         if key_demean_predictors:
             self.ZEstimation[:,:] = (self.ZEstimation[:,:] - self.ZEstimationMean) / self.ZEstimationStd
             self.ZTest[:,:]       = (self.ZTest[:,:] - self.ZEstimationMean) / self.ZEstimationStd
-            print("After demeaning")
-            print('ZEstimation mean and std')
-            print(np.mean(self.ZEstimation, 0))
-            print(np.std(self.ZEstimation, 0))
-            print('ZTest mean and std')
-            print(np.mean(self.ZTest, 0))
-            print(np.std(self.ZTest, 0))
 
         del ZOrig
 
@@ -679,13 +667,6 @@ class Model:
         else:
             self.REstimation = np.zeros((0,0),dtype=np.float64)
             self.RTest = np.zeros((0,0),dtype=np.float64)
-
-        print("REstimation.shape= " + str(self.REstimation.shape))
-        print("RTest.shape= " + str(self.RTest.shape))
-        print("FEstimation.shape= " + str(self.FEstimation.shape))
-        print("FTest.shape= " + str(self.FTest.shape))
-        print("ZEstimation.shape= " + str(self.ZEstimation.shape))
-        print("ZTest.shape= " + str(self.ZTest.shape))
 
         if self.keyConditionalCAPM:
             assert (len(self.FEstimation) == len(self.ZEstimation)) and (len(self.FTest) == len(self.ZTest))
@@ -2305,7 +2286,6 @@ def calculatePredictions(Z, T, AfTilda, phiTilda, phiTildaR, \
                          Sr, SrR, Sf, XtXInv, WtWInv, WRtWRInv, \
                          predictorsIndicesIncludedInModel, factorsIndicesIncludedInModel, otherFactors, \
                          unrestricted_model_probability, restricted_model_probability):
-    print("KMAX", KMax)
 
     iotaT = np.ones((T, 1), dtype=np.float64)
 
@@ -2863,8 +2843,6 @@ def conditionalAssetPricingOOSPredictionsTauNumba(ROrig, FOrig, ZOrig, OmegaOrig
                                         Sr, SrR, Sf, XtXInv, WtWInv, WRtWRInv, \
                                         predictorsIndicesIncludedInModel, factorsIndicesIncludedInModel, otherFactors,\
                                         models_probabilities[model], models_probabilities[model + nModelsMax])
-        print("returns SHASPE", np.shape(returns))
-        print("returns_In SHAPE", np.shape(returns_IN))
 
         returns_IN  += returns
         returns_square_IN += returns_square

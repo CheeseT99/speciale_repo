@@ -26,13 +26,23 @@ toc = time.time()
 
 parent_dir = os.getcwd() # speciale_repo
 
-### Input parameters for single run
+### INPUT PARAMETERS
+
+#strategies = ["conservative","aggressive"]  # You can switch between "aggressive" or "conservative"
+#lambda_values = [1.5, 1.75, 1.99, 2.25, 2.5]
+#gamma_values = [0.12, 0.2, 0.25, 0.35, 0.5]
+strategies = ["conservative"]
+lambda_values = [1.5]
+gamma_values = [0.12]
+start_date = '1997-01-01'
+end_date = '2009-12-01'
+date_tag = f"{start_date}_{end_date}"
+# 11 years of data
+# min_obs = 120
+
+# Changeable?
 r_hat = 0.0  # Reference return
 lambda_ = 2  # Base loss aversion coefficient
-strategies = ["conservative","aggressive"]  # You can switch between "aggressive" or "conservative"
-lambda_values = [1.5, 1.75, 1.99, 2.25, 2.5]
-gamma_values = [0.12, 0.2, 0.25, 0.35, 0.5]
-
 n_predictors_to_use = 2 
 
 # strategies = ["conservative","aggressive"]
@@ -49,11 +59,6 @@ returns = pd.read_csv(datapath, index_col='Date')
 
 # Initiate BMA framework
 bma_pickle_path = 'bma_returns.pkl'
-start_date = '1997-01-01'
-end_date = '2007-12-01'
-date_tag = f"{start_date}_{end_date}"
-# 11 years of data
-# min_obs = 120
 
 bma_returns = po.rolling_bma_returns(parent_dir, n_predictors_to_use=2, start_date=start_date, end_date=end_date)
 tic = time.time()
@@ -87,8 +92,6 @@ historical_returns = po.load_historical_returns(
     start_date=start_date,
     end_date=end_date
 )
-
-print(historical_returns.head())
 
 
 # Historical Mean
@@ -194,6 +197,30 @@ vis.plot_ce_and_sharpe_comparison(comparison_df, save_path="./plots/ce_sharpe_co
 summary_ce_df = ev.summarize_certainty_equivalents(ce_combined_df)
 
 print(summary_ce_df)
+
+performance_summary_df = ev.build_performance_summary_by_method(
+    ce_combined_df=ce_combined_df,
+    comparison_df=comparison_df,
+    results_by_method={
+        "BMA": results_dict_bma,
+        "Historical Mean": results_dict_historical_mean,
+        "MVP": results_dict_mvp,
+        "FF Model": results_dict_factor_model
+    }
+)
+
+print(performance_summary_df)
+
+## Forecast accuracy analysis
+forecast_accuracy_df = ev.evaluate_forecast_accuracy({
+    "BMA": results_dict_bma,
+    "Historical Mean": results_dict_historical_mean,
+    "MVP": results_dict_mvp,
+    "FF Model": results_dict_factor_model
+})
+
+print(forecast_accuracy_df)
+
 
 
 ## Plots

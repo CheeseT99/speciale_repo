@@ -154,3 +154,100 @@ def merge_ce_and_performance(ce_combined_df: pd.DataFrame, comparison_df: pd.Dat
 
     return merged_df.set_index('Strategy_Key')
 
+
+
+def build_performance_summary_by_method(
+    ce_combined_df: pd.DataFrame,
+    comparison_df: pd.DataFrame,
+    results_by_method: dict[str, dict[str, pd.DataFrame]]
+) -> pd.DataFrame:
+    """
+    Builds final summary table for each Method: CE, Sharpe, Max Drawdown, Mean Return, Std Dev, HHI.
+    
+    Args:
+        ce_combined_df: DataFrame with Certainty Equivalent results.
+        comparison_df: DataFrame with Sharpe, Mean Return, Max Drawdown, Std Dev.
+        results_by_method: dict of method name -> results_dict (each strategy -> DataFrame).
+    
+    Returns:
+        pd.DataFrame: Final summary per Method.
+    """
+
+    # --- Certainty Equivalent Aggregates ---
+    ce_summary = ce_combined_df.groupby('Method')['Certainty Equivalent'].agg(
+        CE_Sum='sum',
+        CE_Mean='mean',
+        CE_Std_Dev='std',
+        CE_Median='median'
+    )
+
+    # --- Performance Aggregates ---
+    perf_summary = comparison_df.groupby('Method').agg({
+        'Mean Return': 'mean',
+        'Std Dev': 'mean',              # Added standard deviation here
+        'Sharpe Ratio': 'mean',
+        'Max Drawdown': 'mean',
+        'Final Wealth': 'mean'
+    })
+
+    # --- HHI Aggregates ---
+    hhi_rows = []
+    for method, results_dict in results_by_method.items():
+        all_hhis = []
+        for df in results_dict.values():
+            weights_df = pd.DataFrame(df['Portfolio Weights'].tolist(), index=df.index)
+            hhi = (weights_df ** 2).sum(axis=1)
+            all_hhis.append(hhi)
+        combined_hhi = pd.concat(all_hhis)
+        avg_hhi = combined_hhi.mean()
+        hhi_rows.append({'Method': method, 'Avg HHI': avg_hhi})
+
+    hhi_summary = pd.DataFrame(hhi_rows).set_index('Method')
+
+    # --- Merge all summaries ---
+    final_summary = pd.concat([ce_summary, perf_summary, hhi_summary], axis=1)
+
+    return final_summary.sort_values(by='CE_Mean', ascending=False)
+
+def evaluate_forecast_accuracy(results_by_method: dict[str, dict[str, pd.DataFrame]]) -> pd.DataFrame:
+    """
+    Evaluates forecast accuracy (MSE, MAE, Bias) for expected vs realized portfolio returns
+    across multiple return estimation methods.
+
+    Args:
+        results_by_method: dict of method name -> results_dict (each strategy -> DataFrame).
+
+    Returns:
+        pd.DataFrame: Summary table per Method.
+    """
+
+    rows = []
+
+    for method, results_dict in results_by_method.items():
+        method_errors = []
+
+        for key, df in results_dict.items():
+            if 'Expected Portfolio Returns' not in df.columns:
+                print(f"⚠️ Warning: Method {method} Strategy {key} has no Expected Portfolio Return. Skipping...")
+                continue
+
+            expected_returns = df['Expected Portfolio Returns'].values
+            realized_returns = df['Portfolio Returns'].values
+
+            errors = expected_returns - realized_returns
+            method_errors.extend(errors)
+
+        method_errors = np.array(method_errors)
+
+        mse = np.mean(method_errors**2)
+        mae = np.mean(np.abs(method_errors))
+        bias = np.mean(method_errors)
+
+        rows.append({
+            'Method': method,
+            'MSE': mse,
+            'MAE': mae,
+            'Bias': bias
+        })
+
+    return pd.DataFrame(rows).set_index('Method')

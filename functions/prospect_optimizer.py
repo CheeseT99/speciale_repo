@@ -309,7 +309,7 @@ def bma_predictions(bma_dict, number_of_sim=1000):
         'covariance_matrix_OOS': covariance_matrix_OOS
     }
 
-def calculate_bma_returns(prediction_dict, number_of_sim=10000):
+def calculate_bma_returns_old(prediction_dict, number_of_sim=10000):
     """
     Step 3: Simulate BMA returns from predicted means and covariances.
 
@@ -333,6 +333,35 @@ def calculate_bma_returns(prediction_dict, number_of_sim=10000):
 
     # return simulated_returns_noisy
     return simulated_returns
+
+
+# New way
+def calculate_bma_returns(prediction_dict, asset_columns, number_of_sim=10000, noise_std=0.01):
+    """
+    Step 3: Simulate BMA returns from predicted means and covariances.
+
+    Returns:
+        Simulated return draws (np.ndarray of shape (number_of_sim, K))
+    """
+
+    means = prediction_dict['returns_OOS'][0]
+    cov = prediction_dict['covariance_matrix_OOS'][0]
+
+    # Reconstruct expected returns
+    expected_returns = pd.Series(means, index=asset_columns)
+
+    simulated_returns = np.random.multivariate_normal(
+        means,
+        cov,
+        number_of_sim
+    )
+
+    # Inject noise if you wish
+    noise = np.random.normal(0, noise_std, size=simulated_returns.shape)
+    simulated_returns_noisy = simulated_returns + noise
+
+    return simulated_returns_noisy, expected_returns
+
 
 def run_bma_pipeline(ff_slice, zz_slice, tau, pickle_path_init, pickle_path_pred, number_of_sim=10000):
     """
@@ -371,9 +400,9 @@ def run_bma_pipeline(ff_slice, zz_slice, tau, pickle_path_init, pickle_path_pred
             pkl.dump(pred_dict, f)
 
     # === Step 3: Simulate returns ===
-    sim_draws = calculate_bma_returns(pred_dict, number_of_sim=number_of_sim)
+    sim_draws, expected_returns = calculate_bma_returns(pred_dict, asset_columns=ff_slice.columns[1:], number_of_sim=number_of_sim)
 
-    return sim_draws
+    return sim_draws, expected_returns
 
 
 def rolling_bma_returns(parent_dir, n_predictors_to_use, start_date, end_date, min_obs=120, tau=1.1, number_of_sim=10000) -> OrderedDict[pd.Timestamp, np.ndarray]:
@@ -430,7 +459,7 @@ def rolling_bma_returns(parent_dir, n_predictors_to_use, start_date, end_date, m
         pickle_path_init = os.path.join(cache_dir, f"bma_init_{date_label}.pkl")
         pickle_path_pred = os.path.join(cache_dir, f"bma_pred_{date_label}.pkl")
 
-        sim_draws = run_bma_pipeline(
+        sim_draws, expected_returns = run_bma_pipeline(
             ff_slice=f_reset,
             zz_slice=z_reset,
             tau=tau,
@@ -439,7 +468,7 @@ def rolling_bma_returns(parent_dir, n_predictors_to_use, start_date, end_date, m
             number_of_sim=number_of_sim
         )
 
-        bma_predictions[current_date] = sim_draws
+        bma_predictions[current_date] = (sim_draws, expected_returns)
 
     return bma_predictions
 
@@ -545,12 +574,11 @@ def backtest_portfolio_bma(
             return pkl.load(f)
 
     dates = list(bma_returns.keys())
-    num_assets = bma_returns[dates[0]].shape[1]
-
     portfolio_returns = []
     compounded_returns = []
     portfolio_weights = []
     r_hat_values = []
+    expected_portfolio_returns = []
 
     cumulative_return = 1.0
     r_tminus1 = 0.0
@@ -559,7 +587,7 @@ def backtest_portfolio_bma(
     for t, current_date in enumerate(dates[:-1]):
         print(f"Backtesting {current_date.strftime('%Y-%m')}")
 
-        r_s = bma_returns[current_date]
+        r_s, expected_returns = bma_returns[current_date]
         r_hat = r_tminus1
         r_hat_values.append(r_hat)
 
@@ -577,7 +605,7 @@ def backtest_portfolio_bma(
         portfolio_weights.append(weights)
 
         next_date = dates[t + 1]
-        next_r_s = bma_returns[next_date]
+        next_r_s, _ = bma_returns[next_date]
         portfolio_return_simulated = np.dot(next_r_s, weights)
         portfolio_return = np.mean(portfolio_return_simulated)
 
@@ -585,6 +613,10 @@ def backtest_portfolio_bma(
         cumulative_return *= (1 + portfolio_return)
         compounded_returns.append(cumulative_return)
 
+        # Compute expected portfolio return (ex-ante forecast)
+        expected_portfolio_return = np.dot(expected_returns.values, weights)
+        expected_portfolio_returns.append(expected_portfolio_return)
+        
         r_tminus2 = r_tminus1
         r_tminus1 = portfolio_return
 
@@ -592,6 +624,7 @@ def backtest_portfolio_bma(
         'Portfolio Returns': portfolio_returns,
         'Compounded Returns': compounded_returns,
         'Portfolio Weights': portfolio_weights,
+        'Expected Portfolio Returns': expected_portfolio_returns,
         'r_hat': r_hat_values
     }, index=dates[1:])
 
@@ -606,7 +639,6 @@ def resultgenerator_bma(lambda_values, gamma_values, bma_returns, strategies, da
     Runs backtests over a grid of (lambda, gamma, strategy) using BMA-simulated returns.
     Each result is cached to a .pkl and returned in a dictionary.
     """
-    import os, time
     results_dict = {}
     os.makedirs(cache_dir, exist_ok=True)
 
@@ -664,6 +696,7 @@ def backtest_portfolio_historical_mean(
     compounded_returns = []
     portfolio_weights = []
     r_hat_values = []
+    expected_portfolio_returns = []
 
     cumulative_return = 1.0
     r_tminus1 = 0.0
@@ -699,6 +732,10 @@ def backtest_portfolio_historical_mean(
         portfolio_return = np.dot(next_returns.values, weights)
         portfolio_returns.append(portfolio_return)
 
+        expected_portfolio_return = np.dot(expected_returns.values, weights)
+        expected_portfolio_returns.append(expected_portfolio_return)
+
+
         cumulative_return *= (1 + portfolio_return)
         compounded_returns.append(cumulative_return)
 
@@ -710,6 +747,7 @@ def backtest_portfolio_historical_mean(
         'Portfolio Returns': portfolio_returns,
         'Compounded Returns': compounded_returns,
         'Portfolio Weights': portfolio_weights,
+        'Expected Portfolio Returns': expected_portfolio_returns,
         'r_hat': r_hat_values
     }, index=dates[lookback_period+1:])
 
@@ -937,6 +975,7 @@ def backtest_portfolio_factor_model(
     compounded_returns = []
     portfolio_weights = []
     r_hat_values = []
+    expected_portfolio_returns = []
 
     cumulative_return = 1.0
     r_tminus1 = 0.0
@@ -990,6 +1029,9 @@ def backtest_portfolio_factor_model(
 
         portfolio_return = np.dot(next_returns.values, weights)
         portfolio_returns.append(portfolio_return)
+        expected_portfolio_return = np.dot(expected_returns.values, weights)
+        expected_portfolio_returns.append(expected_portfolio_return)
+
 
         cumulative_return *= (1 + portfolio_return)
         compounded_returns.append(cumulative_return)
@@ -1002,6 +1044,7 @@ def backtest_portfolio_factor_model(
         'Portfolio Returns': portfolio_returns,
         'Compounded Returns': compounded_returns,
         'Portfolio Weights': portfolio_weights,
+        'Expected Portfolio Returns': expected_portfolio_returns,
         'r_hat': r_hat_values
     }, index=dates[lookback_period+1:])
 
