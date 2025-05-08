@@ -39,7 +39,7 @@ gamma_values = [0.12]
 # Latest data: '2016-12-01'
 # Date range for the analysis
 start_date = '1997-01-01'
-end_date = '2009-12-01'
+end_date = '2007-03-01'
 
 # Static parameter
 date_tag = f"{start_date}_{end_date}"
@@ -75,10 +75,18 @@ print(f"Elapsed time: {(tic-toc):.2f}")
 # Cache folder
 cache_dir = "./bma_cache"
 
+# Fetch historical returns
+historical_returns = po.load_historical_returns(
+    parent_dir=parent_dir,
+    start_date=start_date,
+    end_date=end_date
+)
+
 results_dict_bma = po.resultgenerator_bma(
     lambda_values=lambda_values,
     gamma_values=gamma_values,
     bma_returns=bma_returns,
+    true_returns=historical_returns,
     strategies=strategies,
     date_tag=date_tag,
     cache_dir=cache_dir
@@ -91,13 +99,6 @@ print(summary_df.head(10))  # top 10 strategies by Sharpe
 
 # You can now compute CE as usual:
 ce_df = ev.compute_certainty_equivalents(results_dict_bma)
-
-
-historical_returns = po.load_historical_returns(
-    parent_dir=parent_dir,
-    start_date=start_date,
-    end_date=end_date
-)
 
 
 # Historical Mean

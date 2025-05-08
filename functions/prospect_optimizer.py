@@ -356,11 +356,11 @@ def calculate_bma_returns(prediction_dict, asset_columns, number_of_sim=10000, n
         number_of_sim
     )
 
-    # Inject noise if you wish
-    noise = np.random.normal(0, noise_std, size=simulated_returns.shape)
-    simulated_returns_noisy = simulated_returns + noise
+    # # Inject noise if you wish
+    # noise = np.random.normal(0, noise_std, size=simulated_returns.shape)
+    # simulated_returns_noisy = simulated_returns + noise
 
-    return simulated_returns_noisy, expected_returns
+    return simulated_returns, expected_returns
 
 
 def run_bma_pipeline(ff_slice, zz_slice, tau, pickle_path_init, pickle_path_pred, number_of_sim=10000):
@@ -562,6 +562,7 @@ def optimize_portfolio(r_s, r_hat, lambda_, strategy="conservative", gamma=0.1, 
 
 def backtest_portfolio_bma(
     bma_returns: OrderedDict,
+    true_returns: pd.Series,
     strategy="conservative",
     lambda_=1,
     gamma=0.9,
@@ -613,8 +614,13 @@ def backtest_portfolio_bma(
 
         next_date = dates[t + 1]
         next_r_s, _ = bma_returns[next_date]
-        portfolio_return_simulated = np.dot(next_r_s, weights)
-        portfolio_return = np.mean(portfolio_return_simulated)
+
+        N = expected_returns.index
+        true_return = true_returns.loc[current_date][N]
+
+        # Calculate portfolio return
+        # portfolio_return = weights * rigtige returns
+        portfolio_return = np.dot(true_return, weights)
 
         portfolio_returns.append(portfolio_return)
         cumulative_return *= (1 + portfolio_return)
@@ -641,7 +647,7 @@ def backtest_portfolio_bma(
 
     return result_df
 
-def resultgenerator_bma(lambda_values, gamma_values, bma_returns, strategies, date_tag: str, cache_dir="./bma_cache"):
+def resultgenerator_bma(lambda_values, gamma_values, bma_returns, true_returns, strategies, date_tag: str, cache_dir="./bma_cache"):
     """
     Runs backtests over a grid of (lambda, gamma, strategy) using BMA-simulated returns.
     Each result is cached to a .pkl and returned in a dictionary.
@@ -665,6 +671,7 @@ def resultgenerator_bma(lambda_values, gamma_values, bma_returns, strategies, da
                 toc = time.time()
                 results = backtest_portfolio_bma(
                     bma_returns=bma_returns,
+                    true_returns=true_returns,
                     strategy=strategy,
                     lambda_=lambdas,
                     gamma=gammas,
