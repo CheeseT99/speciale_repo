@@ -1,7 +1,8 @@
-#Requirements
+# System imports
 import os
 import sys
 import time
+
 # Construct and print the path
 functions_path = os.path.abspath(os.path.join(os.getcwd(), 'functions'))
 
@@ -9,18 +10,17 @@ functions_path = os.path.abspath(os.path.join(os.getcwd(), 'functions'))
 if functions_path not in sys.path:
     sys.path.append(functions_path)
 
-import numpy as np
-import plotly.graph_objects as go
-from scipy.optimize import minimize
+# Imports
 import pandas as pd
-import statsmodels.api as sm
-from scipy.stats import mannwhitneyu, levene, f_oneway
+
+# Own libraries
 import prospect_optimizer as po
 import visualisation as vis
 import weight_analysis as wa
 import evaluation as ev
+import other_optimizations as oo
 
-import pickle as pkl
+
 
 toc = time.time()
 
@@ -31,11 +31,17 @@ parent_dir = os.getcwd() # speciale_repo
 #strategies = ["conservative","aggressive"]  # You can switch between "aggressive" or "conservative"
 #lambda_values = [1.5, 1.75, 1.99, 2.25, 2.5]
 #gamma_values = [0.12, 0.2, 0.25, 0.35, 0.5]
+# Investor profile parameters
 strategies = ["conservative"]
 lambda_values = [1.5]
 gamma_values = [0.12]
+
+# Latest data: '2016-12-01'
+# Date range for the analysis
 start_date = '1997-01-01'
 end_date = '2009-12-01'
+
+# Static parameter
 date_tag = f"{start_date}_{end_date}"
 # 11 years of data
 # min_obs = 120
@@ -211,17 +217,58 @@ performance_summary_df = ev.build_performance_summary_by_method(
 
 print(performance_summary_df)
 
-## Forecast accuracy analysis
+## Forecast accuracy analysis - No MVP since it doesn't have a forecast
 forecast_accuracy_df = ev.evaluate_forecast_accuracy({
     "BMA": results_dict_bma,
     "Historical Mean": results_dict_historical_mean,
-    "MVP": results_dict_mvp,
     "FF Model": results_dict_factor_model
 })
 
 print(forecast_accuracy_df)
 
 
+# 1. Backtest using Mean-Variance Optimizer
+results_dict_mvo = oo.backtest_portfolio_bma_mvo(
+    bma_returns=bma_returns,
+    risk_aversion=3.0  # Default moderate risk aversion
+)
+
+# Convert
+df_mvo = oo.mvo_results_to_dataframe(results_dict_mvo)
+
+# # Store the MVO results in the same format
+# results_dict_for_eval = {
+#     "PT": results_dict_bma,     # Prospect Theory
+#     "MVO": {"mvo_benchmark": df_mvo}  # Mean-Variance
+# }
+
+### Comparison of optimisation methods ### 
+# It's done using only the first strategy from PT. 
+# Hence it's df structure and not dictionaries. 
+# Fetch the first strategy, lambda, and gamma values
+df_pt = results_dict_bma[f"{strategies[0]}_{lambda_values[0]}_{gamma_values[0]}"]
+df_naive = oo.backtest_bma_naive_df(bma_returns)
+
+methods = {
+    "Prospect Theory": df_pt,
+    "Mean-Variance": df_mvo,
+    "Naive Equal-Weight": df_naive,
+    # later you can add Risk Parity, FF Model, etc.
+}
+
+summary_comparison_df = oo.summarize_methods_comparison(methods, lambda_=1.5, gamma=0.5)
+print(summary_comparison_df)
+
+
+sensitivity_df = oo.sensitivity_analysis_ce(methods, lambda_values=[1.5, 2.0, 2.5, 3.0], gamma=0.5)
+print(sensitivity_df)
+
+vis.plot_returns_vs_pt_value(df_pt, lambda_=1.5, gamma=0.5, method_name="Prospect Theory")
+
+
+
+# Breakpoint before plots
+breakpoint = 1
 
 ## Plots
 

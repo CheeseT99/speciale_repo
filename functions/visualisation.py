@@ -343,3 +343,53 @@ def plot_ce_and_sharpe_comparison(merged_df: pd.DataFrame, save_path: str = None
         print(f"✅ Saved plot to: {save_path}")
     else:
         plt.show()
+
+
+def plot_returns_vs_pt_value(df, lambda_=1.5, gamma=0.5, reference=0.0, method_name="Prospect Theory", save_dir="./plots"):
+    """
+    Plots realized Portfolio Returns vs their PT-evaluated utility values over time,
+    and saves the figure into the specified directory.
+
+    Args:
+        df: DataFrame with 'Portfolio Returns'
+        lambda_: Loss aversion coefficient
+        gamma: Risk aversion curvature
+        reference: Reference return (default 0)
+        method_name: Label for the optimization method (e.g., "Prospect Theory")
+        save_dir: Directory to save plot (default "./plots")
+    """
+    import matplotlib.pyplot as plt
+    import os
+
+    returns = df['Portfolio Returns']
+    pt_values = []
+
+    for r in returns:
+        gain_term = max(0, r - reference)
+        loss_term = max(0, reference - r)
+
+        pt_value = (gain_term ** (1 - gamma)) / (1 - gamma) - lambda_ * (loss_term ** (1 - gamma)) / (1 - gamma)
+        pt_values.append(pt_value)
+
+    # Ensure save directory exists
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Plotting
+    plt.figure(figsize=(12,6))
+    plt.plot(returns.index, returns.values, label="Portfolio Returns", marker='o')
+    plt.plot(returns.index, pt_values, label=f"PT Value (λ={lambda_}, γ={gamma})", marker='x')
+    plt.axhline(0, color='grey', linestyle='--')
+    plt.title(f"Realized Returns vs PT Value Evaluation ({method_name})")
+    plt.xlabel("Date")
+    plt.ylabel("Return / PT Value")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+
+    # Save the plot
+    filename = f"returns_vs_pt_value_{method_name.replace(' ', '_').lower()}.png"
+    filepath = os.path.join(save_dir, filename)
+    plt.savefig(filepath)
+    plt.close()
+
+    print(f"✅ Plot saved to {filepath}")

@@ -84,7 +84,7 @@ def load_reference_returns(parent_dir: str, ref_type: str = "market", start_date
     if col not in factors.columns:
         raise KeyError(f"Column '{col}' not found in factors-20.csv")
 
-    returns = factors[col] / 100  # convert from percent to decimal
+    returns = factors[col]
 
     if start_date:
         returns = returns.loc[start_date:]
@@ -232,7 +232,7 @@ def calculate_zt(expected_return, last_return):
     return (1 + last_return) / (1 + expected_return)
 
 
-def bma_initialization(ff, zz, tau, index_of_estimation, n_predictors_to_use=2):
+def bma_initialization(ff, zz, tau, index_of_estimation, n_predictors_to_use=9):
     """
     Step 1: Initialize the conditional BMA model and compute marginal likelihoods.
 
@@ -298,7 +298,7 @@ def bma_predictions(bma_dict, number_of_sim=1000):
     model = bma_dict['model']
     CMLCombined = bma_dict['CMLCombined']
 
-    nModelsInPrediction = min(number_of_sim, 1000)
+    nModelsInPrediction = int(len(CMLCombined) / 8)
 
     (returns_OOS, _, _, 
      covariance_matrix_OOS, _, 
@@ -381,7 +381,7 @@ def run_bma_pipeline(ff_slice, zz_slice, tau, pickle_path_init, pickle_path_pred
             bma_dict = pkl.load(f)
     else:
         print(f"Pickle not found. Initializing and saving to: {pickle_path_init}")
-        index_of_estimation = len(ff_slice) - 10
+        index_of_estimation = len(ff_slice) - 2
         bma_dict = bma_initialization(ff_slice, zz_slice, tau, index_of_estimation)
 
         with open(pickle_path_init, "wb") as f:
@@ -416,7 +416,8 @@ def rolling_bma_returns(parent_dir, n_predictors_to_use, start_date, end_date, m
     factors_path = os.path.join(parent_dir, "Complemetary Code Files for Submission", "Data", "factors-20.csv")
     predictors_path = os.path.join(parent_dir, "Complemetary Code Files for Submission", "Data", "Z - 197706.csv")
 
-    factors = pd.read_csv(factors_path).drop(columns=['MKTRF', 'SMB*', 'MKT', 'CON', 'IA', 'ROE', 'ME'], errors='ignore')
+    # factors = pd.read_csv(factors_path).drop(columns=['MKTRF', 'SMB*', 'MKT', 'CON', 'IA', 'ROE', 'ME'], errors='ignore')
+    factors = pd.read_csv(factors_path).iloc[:, :10]
     predictors = pd.read_csv(predictors_path).drop(columns=['Unnamed: 0'], errors='ignore')
 
     # --- Parse and align dates ---
@@ -442,7 +443,7 @@ def rolling_bma_returns(parent_dir, n_predictors_to_use, start_date, end_date, m
     all_dates = merged.index[min_obs:]
 
     # --- Ensure cache directory exists ---
-    cache_dir = os.path.join(parent_dir, "bma_cache")
+    cache_dir = os.path.join(parent_dir, "bma_cache2.0")
     os.makedirs(cache_dir, exist_ok=True)
 
     # --- Rolling loop ---
@@ -451,6 +452,12 @@ def rolling_bma_returns(parent_dir, n_predictors_to_use, start_date, end_date, m
 
         f_slice = merged.loc[:current_date, factor_cols]
         z_slice = merged.loc[:current_date, predictor_cols]
+
+
+        # Check if slice length exceeds the desired rolling window length and truncate
+        if len(f_slice) > min_obs:
+            f_slice = f_slice.iloc[-min_obs:]  # Keeps the last 'window_length' observations
+            z_slice = z_slice.iloc[-min_obs:]  # Keeps the last 'window_length' observations
 
         f_reset = f_slice.reset_index().rename(columns={'index': 'Date'})
         z_reset = z_slice.reset_index().rename(columns={'index': 'Date'})

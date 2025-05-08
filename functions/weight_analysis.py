@@ -181,13 +181,10 @@ def save_hhi_heatmaps(pivot_cons, pivot_agg, parent_dir):
     """
     Saves HHI heatmaps (λ x γ) for conservative and aggressive strategies.
     """
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    import os
 
     plots_dir = os.path.join(parent_dir, "plots", "hhi")
     os.makedirs(plots_dir, exist_ok=True)
-
+    
     for pivot, label in [(pivot_cons, "conservative"), (pivot_agg, "aggressive")]:
         plt.figure(figsize=(8, 6))
         sns.heatmap(pivot, annot=True, fmt=".3f", cmap="coolwarm", cbar_kws={"label": "Avg HHI"})
