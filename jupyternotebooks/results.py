@@ -28,18 +28,18 @@ parent_dir = os.getcwd() # speciale_repo
 
 ### INPUT PARAMETERS
 
-#strategies = ["conservative","aggressive"]  # You can switch between "aggressive" or "conservative"
-#lambda_values = [1.5, 1.75, 1.99, 2.25, 2.5]
-#gamma_values = [0.12, 0.2, 0.25, 0.35, 0.5]
+strategies = ["conservative","aggressive"]  # You can switch between "aggressive" or "conservative"
+lambda_values = [1.5, 1.75, 1.99, 2.25, 2.5]
+gamma_values = [0.12, 0.2, 0.25, 0.35, 0.5]
 # Investor profile parameters
-strategies = ["conservative"]
-lambda_values = [1.5]
-gamma_values = [0.12]
+#strategies = ["conservative"]
+ #lambda_values = [1.5,]
+#gamma_values = [0.12]
 
 # Latest data: '2016-12-01'
 # Date range for the analysis
-start_date = '1997-01-01'
-end_date = '2007-03-01'
+start_date = '1987-01-01'
+end_date = '1998-03-01'
 
 # Static parameter
 date_tag = f"{start_date}_{end_date}"

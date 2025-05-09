@@ -37,7 +37,7 @@ def load_historical_returns(parent_dir: str, start_date=None, end_date=None) -> 
     factors.sort_index(inplace=True)
 
     # Drop non-investable columns
-    drop_cols = ['MKTRF', 'SMB*', 'MKT', 'CON', 'IA', 'ROE', 'ME']
+    drop_cols = ['MKTRF', 'SMB*', 'CON', 'IA', 'ROE', 'ME','HML','RMW','BAB','MMOM', 'FIN','MKT']
     factors = factors.drop(columns=[col for col in drop_cols if col in factors.columns], errors='ignore')
 
     # Optional slicing
@@ -405,7 +405,7 @@ def run_bma_pipeline(ff_slice, zz_slice, tau, pickle_path_init, pickle_path_pred
     return sim_draws, expected_returns
 
 
-def rolling_bma_returns(parent_dir, n_predictors_to_use, start_date, end_date, min_obs=120, tau=1.1, number_of_sim=10000) -> OrderedDict[pd.Timestamp, np.ndarray]:
+def rolling_bma_returns(parent_dir, n_predictors_to_use, start_date, end_date, min_obs=120, tau=1.5, number_of_sim=10000) -> OrderedDict[pd.Timestamp, np.ndarray]:
     """
     Rolling BMA simulation:
     - For each month, estimate model (or load from cache)
@@ -416,9 +416,11 @@ def rolling_bma_returns(parent_dir, n_predictors_to_use, start_date, end_date, m
     factors_path = os.path.join(parent_dir, "Complemetary Code Files for Submission", "Data", "factors-20.csv")
     predictors_path = os.path.join(parent_dir, "Complemetary Code Files for Submission", "Data", "Z - 197706.csv")
 
-    # factors = pd.read_csv(factors_path).drop(columns=['MKTRF', 'SMB*', 'MKT', 'CON', 'IA', 'ROE', 'ME'], errors='ignore')
-    factors = pd.read_csv(factors_path).iloc[:, :10]
-    predictors = pd.read_csv(predictors_path).drop(columns=['Unnamed: 0'], errors='ignore')
+    factors = pd.read_csv(factors_path).drop(columns=['MKTRF', 'SMB*', 'CON', 'IA', 'ROE', 'ME','HML','RMW','BAB','MMOM', 'FIN','MKT'], errors='ignore')
+    #factors = pd.read_csv(factors_path).iloc[:, :10]
+    predictors = pd.read_csv(predictors_path).drop(columns=['Unnamed: 0','infl','b.m','tms','ltr'], errors='ignore')
+    print(factors.columns)
+    print(predictors.columns)
 
     # --- Parse and align dates ---
     factors['Date'] = pd.to_datetime(factors['Date'].astype(str), format='%Y%m')

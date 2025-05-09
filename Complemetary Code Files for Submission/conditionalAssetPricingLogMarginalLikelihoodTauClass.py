@@ -2601,6 +2601,8 @@ def conditionalAssetPricingOOSPredictionsTauNumba(ROrig, FOrig, ZOrig, OmegaOrig
 
     nModelsMax = pow(2, KMax + MMax)
 
+    print("nModelsMax", nModelsMax)
+
     # models_probabilities - first is the unrestricted AP models' probabilities and than the restricted AP models' probabilities.
     assert len(models_probabilities) == 2 * nModelsMax
 
