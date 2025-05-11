@@ -36,20 +36,20 @@ parent_dir = os.getcwd() # speciale_repo
 
 ################Rigtige input parametre#######################
 
-#strategies = ["conservative"]
-#lambda_values = [1.5, 1.75, 1.99]
-#gamma_values = [0.12, 0.2, 0.25]
+#Sstrategies = ["conservative"]
+lambda_values = [1.5, 1.75, 1.99]
+gamma_values = [0.12, 0.2, 0.25]
 #############################################################
 
 #TESTING PARAMETERS
-strategies = ["conservative"]
-lambda_values = [1.99]
-gamma_values = [ 0.2]
+#strategies = ["conservative"]
+#lambda_values = [1.99]
+#gamma_values = [ 0.2]
 
 
 #############Test dates#################
-start_date = '1977-06-01'
-end_date = '1987-09-01'
+#start_date = '1977-06-01'
+#end_date = '1991-02-01'
 
 
 ########################################
@@ -57,7 +57,11 @@ end_date = '1987-09-01'
 
 
 
-#####################This is the True start and end date#################
+#####################This is the True start and end date#################\\
+
+start_date = '1977-06-01'
+end_date = '2016-12-01'
+
 # Latest data: '2016-12-01'
 # Date range for the analysis
 ##end_date = '2016-12-01'

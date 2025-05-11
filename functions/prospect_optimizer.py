@@ -634,7 +634,7 @@ def backtest_portfolio_bma(
         expected_portfolio_returns.append(expected_portfolio_return)
         
         r_tminus2 = r_tminus1
-        r_tminus1 = portfolio_return
+        r_tminus1 = portfolio_return #Aendr dette
 
     result_df = pd.DataFrame({
         'Portfolio Returns': portfolio_returns,
@@ -1120,17 +1120,18 @@ def backtest_portfolio_max_sharpe(
         print(f"Backtesting {current_date.strftime('%Y-%m')}")
 
         # Lookback returns
-        past_returns = historical_returns.iloc[t - lookback_period:t].mean()
+        past_returns = historical_returns.iloc[t - lookback_period:t]
         cov_matrix = past_returns.cov()
+        expected_returns = past_returns.mean()
 
        
         initial_weights = np.ones(num_assets) / num_assets
 
         result = result = maximize_sharp_ratio_no_spec(
-            past_returns, cov_matrix, initial_weights, Bounds(0, 1)  
+            expected_returns, cov_matrix, initial_weights, Bounds(0, 1)  
         )
 
-        weights = [round(w, 4) for w in result.x]
+        weights = [round(w, 4) for w in result]
         portfolio_weights.append(weights)
 
         # === Next period realized returns
