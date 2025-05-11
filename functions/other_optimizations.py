@@ -52,16 +52,16 @@ def backtest_portfolio_bma_mvo(bma_returns: dict, risk_aversion: float = 3.0) ->
     cumulative_return = 1.0
 
     for t, current_date in enumerate(dates[:-1]):
-        sim_draws, expected_returns = bma_returns[current_date]
+        sim_draws, expected_returns, covariance = bma_returns[current_date]
 
         mean_return = expected_returns.values
-        cov_matrix = np.cov(sim_draws.T)
+        cov_matrix = covariance
 
         # Optimize
         weights = optimize_mean_variance(mean_return, cov_matrix, risk_aversion)
 
         # Next period returns
-        next_draws, _ = bma_returns[dates[t + 1]]
+        next_draws, _, _ = bma_returns[dates[t + 1]]
         realized_returns = next_draws.mean(axis=0)  # average of simulated returns next period
 
         portfolio_return = np.dot(realized_returns, weights)
@@ -272,8 +272,8 @@ def backtest_bma_naive_df(bma_returns: dict) -> pd.DataFrame:
         next_date = dates[t + 1]
 
         # Get current expected returns and next realized returns
-        _, expected_returns = bma_returns[current_date]
-        next_draws, _ = bma_returns[next_date]
+        _, expected_returns, _ = bma_returns[current_date]
+        next_draws, _, _ = bma_returns[next_date]
 
         realized_returns = next_draws.mean(axis=0)
         portfolio_return = np.dot(realized_returns, equal_weights)

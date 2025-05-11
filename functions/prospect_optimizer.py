@@ -1,6 +1,6 @@
 import numpy as np
 import plotly.graph_objects as go
-from scipy.optimize import minimize
+from scipy.optimize import Bounds, LinearConstraint, minimize
 import pandas as pd
 import statsmodels.api as sm
 from scipy.stats import mannwhitneyu, levene, f_oneway
@@ -9,7 +9,6 @@ import pickle as pkl
 import os
 from collections import OrderedDict
 from sklearn.linear_model import LinearRegression
-
 import evaluation as ev
 
 import time
@@ -360,7 +359,7 @@ def calculate_bma_returns(prediction_dict, asset_columns, number_of_sim=10000, n
     # noise = np.random.normal(0, noise_std, size=simulated_returns.shape)
     # simulated_returns_noisy = simulated_returns + noise
 
-    return simulated_returns, expected_returns
+    return simulated_returns, expected_returns, cov
 
 
 def run_bma_pipeline(ff_slice, zz_slice, tau, pickle_path_init, pickle_path_pred, number_of_sim=10000):
@@ -400,9 +399,9 @@ def run_bma_pipeline(ff_slice, zz_slice, tau, pickle_path_init, pickle_path_pred
             pkl.dump(pred_dict, f)
 
     # === Step 3: Simulate returns ===
-    sim_draws, expected_returns = calculate_bma_returns(pred_dict, asset_columns=ff_slice.columns[1:], number_of_sim=number_of_sim)
+    sim_draws, expected_returns, bma_covariance = calculate_bma_returns(pred_dict, asset_columns=ff_slice.columns[1:], number_of_sim=number_of_sim)
 
-    return sim_draws, expected_returns
+    return sim_draws, expected_returns, bma_covariance
 
 
 def rolling_bma_returns(parent_dir, n_predictors_to_use, start_date, end_date, min_obs=120, tau=1.5, number_of_sim=10000) -> OrderedDict[pd.Timestamp, np.ndarray]:
@@ -468,7 +467,7 @@ def rolling_bma_returns(parent_dir, n_predictors_to_use, start_date, end_date, m
         pickle_path_init = os.path.join(cache_dir, f"bma_init_{date_label}.pkl")
         pickle_path_pred = os.path.join(cache_dir, f"bma_pred_{date_label}.pkl")
 
-        sim_draws, expected_returns = run_bma_pipeline(
+        sim_draws, expected_returns, bma_covariance = run_bma_pipeline(
             ff_slice=f_reset,
             zz_slice=z_reset,
             tau=tau,
@@ -477,7 +476,8 @@ def rolling_bma_returns(parent_dir, n_predictors_to_use, start_date, end_date, m
             number_of_sim=number_of_sim
         )
 
-        bma_predictions[current_date] = (sim_draws, expected_returns)
+        bma_predictions[current_date] = (sim_draws, expected_returns, bma_covariance)
+        #print(bma_covariance)
 
     return bma_predictions
 
@@ -597,7 +597,7 @@ def backtest_portfolio_bma(
     for t, current_date in enumerate(dates[:-1]):
         print(f"Backtesting {current_date.strftime('%Y-%m')}")
 
-        r_s, expected_returns = bma_returns[current_date]
+        r_s, expected_returns, bma_covariance = bma_returns[current_date]
         r_hat = r_tminus1
         r_hat_values.append(r_hat)
 
@@ -612,10 +612,11 @@ def backtest_portfolio_bma(
             BMA=True
         )
         weights = [round(w, 4) for w in result.x]
+        print(f"Optimized Weights: {weights} prospect_value")
         portfolio_weights.append(weights)
 
         next_date = dates[t + 1]
-        next_r_s, _ = bma_returns[next_date]
+        next_r_s, _,_ = bma_returns[next_date]
 
         N = expected_returns.index
         true_return = true_returns.loc[current_date][N]
@@ -649,6 +650,120 @@ def backtest_portfolio_bma(
 
     return result_df
 
+#Taget fra min bachelor
+def maximize_sharp_ratio_no_spec(port_return: pd.DataFrame, 
+                         port_covariance: pd.DataFrame,
+                         x0,
+                         bounds: Bounds):
+    """ This function will take different inputs including portfolio return and covariance matrix, to maximize the sharp ratio of different portfolios with no extra constraints.
+    
+    :param port_return: Portfolio return
+    :param port_covariance: Portfolio covariance matrix
+    :param x0: Initial guess for the minimizer
+    :param bounds: Bounds for the minimizer
+    :returns: Portfolio weight choice for maximizing sharp ratio with no extra constraints
+    """
+    function = lambda weight: np.sqrt(np.dot(weight,np.dot(weight,port_covariance)))/port_return.dot(weight)
+    bounds = bounds
+    constraints = (LinearConstraint(np.ones((port_covariance.shape[1],), dtype=int),1,1))
+                    #{'type': 'eq', 'fun': lambda weight: np.sqrt(np.dot(weight, np.dot(weight, port_covariance)))}) #Second restraint lets us define how high a return we want                                           
+    result = minimize(function, 
+                      x0,
+                      method='SLSQP', 
+                      bounds=bounds, 
+                      constraints=constraints)
+   
+    return result.x
+
+
+def backtest_portfolio_bma_maxsharpe(
+    bma_returns: OrderedDict,
+    true_returns: pd.Series,
+    strategy="conservative",
+    lambda_=1,
+    gamma=0.9,
+    pickle_path_backtest: str = None,
+    bounds=Bounds(0, 1) # We set at no long short positions, but this can be changed to allow for shorting
+) -> pd.DataFrame:
+    """
+    Backtest portfolio using prospect theory on simulated BMA return draws.
+    Will cache to pickle if pickle_path_backtest is provided.
+
+    Returns:
+        pd.DataFrame with ['Portfolio Returns', 'Compounded Returns', 'Portfolio Weights', 'r_hat']
+    """
+
+    if pickle_path_backtest is not None and os.path.exists(pickle_path_backtest):
+        print(f"Loading cached backtest from: {pickle_path_backtest}")
+        with open(pickle_path_backtest, "rb") as f:
+            return pkl.load(f)
+
+    dates = list(bma_returns.keys())
+    portfolio_returns = []
+    compounded_returns = []
+    portfolio_weights = []
+    r_hat_values = []
+    expected_portfolio_returns = []
+
+    cumulative_return = 1.0
+    r_tminus1 = 0.0
+    r_tminus2 = 0.0
+
+    for t, current_date in enumerate(dates[:-1]):
+        print(f"Backtesting {current_date.strftime('%Y-%m')}")
+
+        r_s, expected_returns, bma_covariance = bma_returns[current_date]
+        r_hat = r_tminus1
+        r_hat_values.append(r_hat)
+        w0 = np.linspace(start=1, stop=0, num=bma_covariance.shape[1])
+        x0 = w0/np.sum(w0)
+
+        result = maximize_sharp_ratio_no_spec(
+            expected_returns, bma_covariance, x0, bounds  
+        )
+        weights = [round(w, 4) for w in result]
+
+        print(f"Optimal weights: {weights}")
+        portfolio_weights.append(weights)
+
+        next_date = dates[t + 1]
+        next_r_s, _,_ = bma_returns[next_date]
+
+        N = expected_returns.index
+        true_return = true_returns.loc[current_date][N]
+
+        # Calculate portfolio return
+        # portfolio_return = weights * rigtige returns
+        portfolio_return = np.dot(true_return, weights)
+
+        portfolio_returns.append(portfolio_return)
+        cumulative_return *= (1 + portfolio_return)
+        compounded_returns.append(cumulative_return)
+        
+
+        # Compute expected portfolio return (ex-ante forecast)
+        expected_portfolio_return = np.dot(expected_returns.values, weights)
+        expected_portfolio_returns.append(expected_portfolio_return)
+        
+        r_tminus2 = r_tminus1
+        r_tminus1 = portfolio_return
+
+    result_df = pd.DataFrame({
+        'Portfolio Returns': portfolio_returns,
+        'Compounded Returns': compounded_returns,
+        'Portfolio Weights': portfolio_weights,
+        'Expected Portfolio Returns': expected_portfolio_returns,
+        'r_hat': r_hat_values
+    }, index=dates[1:])
+
+    if pickle_path_backtest is not None:
+        with open(pickle_path_backtest, "wb") as f:
+            pkl.dump(result_df, f)
+
+    return result_df
+
+
+
 def resultgenerator_bma(lambda_values, gamma_values, bma_returns, true_returns, strategies, date_tag: str, cache_dir="./bma_cache"):
     """
     Runs backtests over a grid of (lambda, gamma, strategy) using BMA-simulated returns.
@@ -672,6 +787,44 @@ def resultgenerator_bma(lambda_values, gamma_values, bma_returns, true_returns, 
 
                 toc = time.time()
                 results = backtest_portfolio_bma(
+                    bma_returns=bma_returns,
+                    true_returns=true_returns,
+                    strategy=strategy,
+                    lambda_=lambdas,
+                    gamma=gammas,
+                    pickle_path_backtest=pickle_path_bt
+                )
+                tic = time.time()
+                print(f"    → Completed in {(tic - toc):.2f}s")
+
+                results_dict[key] = results
+
+    return results_dict
+
+
+def resultgenerator_bma_maxsharpe(lambda_values, gamma_values, bma_returns, true_returns, strategies, date_tag: str, cache_dir="./bma_cache_maxsharpe"):
+    """
+    Runs backtests over a grid of (lambda, gamma, strategy) using BMA-simulated returns.
+    Each result is cached to a .pkl and returned in a dictionary.
+    """
+    results_dict = {}
+    os.makedirs(cache_dir, exist_ok=True)
+
+    for lambdas in lambda_values:
+        print(f"\nλ = {lambdas}")
+        for gammas in gamma_values:
+            print(f"  γ = {gammas}")
+            for strategy in strategies:
+                key = f"{strategy}_{lambdas}_{gammas}"
+                print(f"    Strategy: {key}")
+
+                pickle_path_bt = os.path.join(
+                    cache_dir,
+                    f"backtest_bmamaxsharpe_{strategy}_lambda{lambdas}_gamma{gammas}_{date_tag}.pkl"
+                )
+
+                toc = time.time()
+                results = backtest_portfolio_bma_maxsharpe(
                     bma_returns=bma_returns,
                     true_returns=true_returns,
                     strategy=strategy,
@@ -889,6 +1042,10 @@ def backtest_portfolio_mvp(
     return result_df
 
 
+
+
+
+
 def resultgenerator_mvp(lambda_values, gamma_values, historical_returns, strategies, date_tag: str, cache_dir="./mvp_cache"):
     """
     Runs MVP backtests over (lambda, gamma, strategy) grid.
@@ -923,6 +1080,126 @@ def resultgenerator_mvp(lambda_values, gamma_values, historical_returns, strateg
                 results_dict[key] = results
 
     return results_dict
+
+
+### Mean variance optimization without BMA
+
+
+def backtest_portfolio_max_sharpe(
+    historical_returns: pd.DataFrame,
+    strategy="conservative",
+    lambda_=1,
+    gamma=0.9,
+    lookback_period: int = 120,
+    pickle_path_backtest: str = None
+) -> pd.DataFrame:
+    """
+    Backtest Minimum Variance Portfolio (MVP) without expected returns.
+    NOTE: We don't use optimize_portfolio() here, since returns doesn't matter in MVP, ONLY minimized variance.
+    """
+
+    if pickle_path_backtest is not None and os.path.exists(pickle_path_backtest):
+        print(f"Loading cached MVP backtest from: {pickle_path_backtest}")
+        with open(pickle_path_backtest, "rb") as f:
+            return pkl.load(f)
+
+    dates = historical_returns.index
+    num_assets = historical_returns.shape[1]
+
+    portfolio_returns = []
+    compounded_returns = []
+    portfolio_weights = []
+    r_hat_values = []
+
+    cumulative_return = 1.0
+    r_tminus1 = 0.0
+    r_tminus2 = 0.0
+
+    for t in range(lookback_period, len(dates) - 1):
+        current_date = dates[t]
+        print(f"Backtesting {current_date.strftime('%Y-%m')}")
+
+        # Lookback returns
+        past_returns = historical_returns.iloc[t - lookback_period:t].mean()
+        cov_matrix = past_returns.cov()
+
+       
+        initial_weights = np.ones(num_assets) / num_assets
+
+        result = result = maximize_sharp_ratio_no_spec(
+            past_returns, cov_matrix, initial_weights, Bounds(0, 1)  
+        )
+
+        weights = [round(w, 4) for w in result.x]
+        portfolio_weights.append(weights)
+
+        # === Next period realized returns
+        next_returns = historical_returns.iloc[t + 1]
+
+        portfolio_return = np.dot(next_returns.values, weights)
+        portfolio_returns.append(portfolio_return)
+
+        cumulative_return *= (1 + portfolio_return)
+        compounded_returns.append(cumulative_return)
+
+        r_hat_values.append(r_tminus1)
+        r_tminus2 = r_tminus1
+        r_tminus1 = portfolio_return
+
+    result_df = pd.DataFrame({
+        'Portfolio Returns': portfolio_returns,
+        'Compounded Returns': compounded_returns,
+        'Portfolio Weights': portfolio_weights,
+        'r_hat': r_hat_values
+    }, index=dates[lookback_period+1:])
+
+    if pickle_path_backtest is not None:
+        with open(pickle_path_backtest, "wb") as f:
+            pkl.dump(result_df, f)
+
+    return result_df
+
+
+
+
+
+
+def resultgenerator_max_sharpe(lambda_values, gamma_values, historical_returns, strategies, date_tag: str, cache_dir="./max_sharpe_cache"):
+    """
+    Runs MVP backtests over (lambda, gamma, strategy) grid.
+    """
+    results_dict = {}
+    os.makedirs(cache_dir, exist_ok=True)
+
+    for lambdas in lambda_values:
+        print(f"\nλ = {lambdas}")
+        for gammas in gamma_values:
+            print(f"  γ = {gammas}")
+            for strategy in strategies:
+                key = f"{strategy}_{lambdas}_{gammas}"
+                print(f"    Strategy: {key}")
+
+                pickle_path_bt = os.path.join(
+                    cache_dir,
+                    f"backtest_maxsharpe_{strategy}_lambda{lambdas}_gamma{gammas}_{date_tag}.pkl"
+                )
+
+                toc = time.time()
+                results = backtest_portfolio_max_sharpe(
+                    historical_returns=historical_returns,
+                    strategy=strategy,
+                    lambda_=lambdas,
+                    gamma=gammas,
+                    pickle_path_backtest=pickle_path_bt
+                )
+                tic = time.time()
+                print(f"    → Completed in {(tic - toc):.2f}s")
+
+                results_dict[key] = results
+
+    return results_dict
+
+
 
 ### Fama-French 5-Factor Model
 

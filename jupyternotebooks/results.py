@@ -2,7 +2,7 @@
 import os
 import sys
 import time
-
+from scipy.optimize import Bounds  
 # Construct and print the path
 functions_path = os.path.abspath(os.path.join(os.getcwd(), 'functions'))
 
@@ -28,19 +28,40 @@ parent_dir = os.getcwd() # speciale_repo
 
 ### INPUT PARAMETERS
 
-strategies = ["conservative","aggressive"]  # You can switch between "aggressive" or "conservative"
-lambda_values = [1.5, 1.75, 1.99, 2.25, 2.5]
-gamma_values = [0.12, 0.2, 0.25, 0.35, 0.5]
+#strategies = ["conservative","aggressive"]  # You can switch between "aggressive" or "conservative"
+#lambda_values = [1.5, 1.75, 1.99, 2.25, 2.5]
+#gamma_values = [0.12, 0.2, 0.25, 0.35, 0.5]
 # Investor profile parameters
-#strategies = ["conservative"]
- #lambda_values = [1.5,]
-#gamma_values = [0.12]
 
+
+################Rigtige input parametre#######################
+
+#strategies = ["conservative"]
+#lambda_values = [1.5, 1.75, 1.99]
+#gamma_values = [0.12, 0.2, 0.25]
+#############################################################
+
+#TESTING PARAMETERS
+strategies = ["conservative"]
+lambda_values = [1.99]
+gamma_values = [ 0.2]
+
+
+#############Test dates#################
+start_date = '1977-06-01'
+end_date = '1987-09-01'
+
+
+########################################
+
+
+
+
+#####################This is the True start and end date#################
 # Latest data: '2016-12-01'
 # Date range for the analysis
-start_date = '1987-01-01'
-end_date = '1998-03-01'
-
+##end_date = '2016-12-01'
+########################################################################
 # Static parameter
 date_tag = f"{start_date}_{end_date}"
 # 11 years of data
@@ -91,6 +112,17 @@ results_dict_bma = po.resultgenerator_bma(
     date_tag=date_tag,
     cache_dir=cache_dir
 )
+
+
+results_dict_bma_maxsharpe = po.resultgenerator_bma_maxsharpe(
+    lambda_values=lambda_values,
+    gamma_values=gamma_values,
+    bma_returns=bma_returns,
+    true_returns=historical_returns,
+    strategies=strategies,
+    date_tag=date_tag,
+    cache_dir=cache_dir
+)
 # Keys in results_dict are tuples of (strategy, lambda, gamma)
 # Example to extract a single strategy result: summary_df['conservative_1.5_0.12']
 
@@ -112,6 +144,15 @@ results_dict_historical_mean = po.resultgenerator_historical_mean(
 
 # MVP
 results_dict_mvp = po.resultgenerator_mvp(
+    lambda_values=lambda_values,
+    gamma_values=gamma_values,
+    historical_returns=historical_returns,
+    strategies=strategies,
+    date_tag=date_tag
+)
+#Max Sharpe
+
+results_dict_max_sharpe = po.resultgenerator_max_sharpe(
     lambda_values=lambda_values,
     gamma_values=gamma_values,
     historical_returns=historical_returns,
@@ -188,7 +229,9 @@ results_by_method = {
     "BMA": results_dict_bma,
     "Historical Mean": results_dict_historical_mean,
     "MVP": results_dict_mvp,
-    "FF Model": results_dict_factor_model
+    "FF Model": results_dict_factor_model,
+    "Max sharpe BMA": results_dict_bma_maxsharpe,
+    "Max Sharpe": results_dict_max_sharpe
 }
 comparison_df = po.compare_methods(results_by_method)
 print(comparison_df.head())
