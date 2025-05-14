@@ -1394,6 +1394,45 @@ def resultgenerator_factor_model(
     return results_dict
 
 
+def naive_equal_weight_portfolio(
+    returns: pd.DataFrame,
+    start_date: str,
+    end_date: str
+) -> pd.DataFrame:
+    """
+    Computes the naive equal-weighted (1/N) portfolio returns over time,
+    starting from (start_date + 10 years) to match BMA evaluation window.
+
+    Args:
+        returns: DataFrame of asset returns (rows = time, columns = assets)
+        start_date: date from which to offset 10 years (e.g. '1997-01-01')
+        end_date: final evaluation date (e.g. '2023-12-31')
+
+    Returns:
+        DataFrame with:
+        - 'Portfolio Returns': equal-weighted return at each time
+        - 'Compounded Returns': cumulative return path
+        - 'Portfolio Weights': constant equal weights
+    """
+    start_dt = pd.to_datetime(start_date) + pd.DateOffset(years=10)
+    end_dt = pd.to_datetime(end_date)
+
+    sliced_returns = returns.loc[start_dt:end_dt]
+
+    n_assets = sliced_returns.shape[1]
+    equal_weights = np.ones(n_assets) / n_assets
+
+    portfolio_returns = sliced_returns @ equal_weights
+    compounded_returns = (1 + portfolio_returns).cumprod()
+
+    return pd.DataFrame({
+        'Portfolio Returns': portfolio_returns,
+        'Compounded Returns': compounded_returns,
+        'Portfolio Weights': [equal_weights] * len(portfolio_returns),
+    }, index=sliced_returns.index)
+
+
+
 
 def backtest_portfolio_dynamic_rhat(
     bma_returns: OrderedDict,
@@ -1561,40 +1600,64 @@ def parse_strategy_key(key: str) -> tuple:
     strategy, lam, gamma = key.split("_")
     return strategy, float(lam), float(gamma)
 
-
-def summarize_backtest_results(results_dict: dict) -> pd.DataFrame:
+def summarize_backtest_results(results_input) -> pd.DataFrame:
     """
-    Summarizes backtest performance across strategies.
+    Summarizes backtest performance across strategies or a single strategy.
     
     Args:
-        results_dict (dict): Output from resultgenerator_bma(), 
-                             where keys are strategy_lambda_gamma identifiers 
-                             and values are result DataFrames.
-    
+        results_input (dict or pd.DataFrame): 
+            - dict: from resultgenerator_*(), where keys are strategy_lambda_gamma and values are DataFrames
+            - DataFrame: single naive strategy with 'Portfolio Returns' and 'Compounded Returns'
+
     Returns:
-        pd.DataFrame with summary metrics per strategy/parameter combo.
+        pd.DataFrame with summary metrics per strategy/parameter combo
     """
     summary_rows = []
 
-    for key, df in results_dict.items():
+    if isinstance(results_input, dict):
+        # Loop over strategy keys
+        for key, df in results_input.items():
+            returns = df['Portfolio Returns']
+            compounded = df['Compounded Returns']
+
+            mean_ret = returns.mean()
+            std_ret = returns.std(ddof=1)
+            sharpe = mean_ret / std_ret if std_ret > 0 else np.nan
+            final_wealth = compounded.iloc[-1]
+            min_wealth = compounded.min()
+            max_drawdown = 1 - (min_wealth / compounded.cummax()).min()
+
+            strategy, lam, gamma = parse_strategy_key(key)
+
+            summary_rows.append({
+                'Strategy_Key': key,
+                'Strategy': strategy,
+                'Lambda': lam,
+                'Gamma': gamma,
+                'Mean Return': mean_ret,
+                'Std Dev': std_ret,
+                'Sharpe Ratio': sharpe,
+                'Final Wealth': final_wealth,
+                'Max Drawdown': max_drawdown
+            })
+    else:
+        # Single DataFrame, e.g., for naive equal-weight
+        df = results_input
         returns = df['Portfolio Returns']
         compounded = df['Compounded Returns']
 
-        # Performance metrics
         mean_ret = returns.mean()
-        std_ret = returns.std()
-        sharpe = mean_ret / std_ret if std_ret != 0 else np.nan
+        std_ret = returns.std(ddof=1)
+        sharpe = mean_ret / std_ret if std_ret > 0 else np.nan
         final_wealth = compounded.iloc[-1]
         min_wealth = compounded.min()
         max_drawdown = 1 - (min_wealth / compounded.cummax()).min()
 
-        strategy, lam, gamma = parse_strategy_key(key)
-
         summary_rows.append({
-            'Strategy_Key': key,
-            'Strategy': strategy,
-            'Lambda': lam,
-            'Gamma': gamma,
+            'Strategy_Key': "Naive Equal-Weight",
+            'Strategy': "naive",
+            'Lambda': None,
+            'Gamma': None,
             'Mean Return': mean_ret,
             'Std Dev': std_ret,
             'Sharpe Ratio': sharpe,
@@ -1604,6 +1667,7 @@ def summarize_backtest_results(results_dict: dict) -> pd.DataFrame:
 
     summary_df = pd.DataFrame(summary_rows).set_index('Strategy_Key')
     return summary_df.sort_values(by='Sharpe Ratio', ascending=False)
+
 
 
 def compare_methods(results_by_method: dict[str, dict[str, pd.DataFrame]]) -> pd.DataFrame:
