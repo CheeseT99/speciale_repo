@@ -35,15 +35,15 @@ parent_dir = os.getcwd() # speciale_repo
 
 ################Rigtige input parametre#######################
 
-#Sstrategies = ["conservative"]
-lambda_values = [1.5, 1.75, 1.99]
-gamma_values = [0.12, 0.2, 0.25]
+# strategies = ["conservative"]
+# lambda_values = [1.5, 1.75, 1.99]
+# gamma_values = [0.12, 0.2, 0.25]
 #############################################################
 
 #TESTING PARAMETERS
-#strategies = ["conservative"]
-#lambda_values = [1.99]
-#gamma_values = [ 0.2]
+strategies = ["conservative"]
+lambda_values = [1.99]
+gamma_values = [ 0.2]
 
 
 #############Test dates#################
@@ -59,7 +59,7 @@ gamma_values = [0.12, 0.2, 0.25]
 #####################This is the True start and end date#################\\
 
 start_date = '1977-06-01'
-end_date = '2016-12-01'
+end_date = '1988-12-01'
 
 # Latest data: '2016-12-01'
 # Date range for the analysis
@@ -134,6 +134,15 @@ print(summary_df.head(10))  # top 10 strategies by Sharpe
 
 # You can now compute CE as usual:
 ce_df = ev.compute_certainty_equivalents(results_dict_bma)
+
+# Naive equal-weight portfolio
+results_naive = po.naive_equal_weight_portfolio(historical_returns, start_date, end_date)
+
+# Reuse the strategy key format used in other models
+key = f"conservative_{lambda_values[0]}_{gamma_values[0]}"
+results_dict_naive = {
+    key: results_naive  # naive_df is your equal-weight result as DataFrame
+}
 
 
 # Historical Mean
@@ -234,7 +243,8 @@ results_by_method = {
     "MVP": results_dict_mvp,
     "FF Model": results_dict_factor_model,
     "Max sharpe BMA": results_dict_bma_maxsharpe,
-    "Max Sharpe": results_dict_max_sharpe
+    "Max Sharpe": results_dict_max_sharpe,
+    "Naive Equal-Weight": results_dict_naive
 }
 comparison_df = po.compare_methods(results_by_method)
 print(comparison_df.head())
@@ -254,70 +264,70 @@ print(summary_ce_df)
 performance_summary_df = ev.build_performance_summary_by_method(
     ce_combined_df=ce_combined_df,
     comparison_df=comparison_df,
-    results_by_method={
-        "BMA": results_dict_bma,
-        "Historical Mean": results_dict_historical_mean,
-        "MVP": results_dict_mvp,
-        "FF Model": results_dict_factor_model
-    }
+    results_by_method=results_by_method
 )
 
 print(performance_summary_df)
 
-## Forecast accuracy analysis - No MVP since it doesn't have a forecast
-forecast_accuracy_df = ev.evaluate_forecast_accuracy({
+## Forecast accuracy analysis - Custom select dicts since some doesn't have estimated returns
+results_by_method_for_accuracy = {
     "BMA": results_dict_bma,
     "Historical Mean": results_dict_historical_mean,
-    "FF Model": results_dict_factor_model
-})
+    "FF Model": results_dict_factor_model,
+    "Max sharpe BMA": results_dict_bma_maxsharpe
+    }
+
+forecast_accuracy_df = ev.evaluate_forecast_accuracy(results_by_method_for_accuracy)
 
 print(forecast_accuracy_df)
 
 
-# 1. Backtest using Mean-Variance Optimizer
-results_dict_mvo = oo.backtest_portfolio_bma_mvo(
-    bma_returns=bma_returns,
-    risk_aversion=3.0  # Default moderate risk aversion
-)
-
-# Convert
-df_mvo = oo.mvo_results_to_dataframe(results_dict_mvo)
-
-# # Store the MVO results in the same format
-# results_dict_for_eval = {
-#     "PT": results_dict_bma,     # Prospect Theory
-#     "MVO": {"mvo_benchmark": df_mvo}  # Mean-Variance
-# }
 
 ### Comparison of optimisation methods ### 
-# It's done using only the first strategy from PT. 
-# Hence it's df structure and not dictionaries. 
-# Fetch the first strategy, lambda, and gamma values
-df_pt = results_dict_bma[f"{strategies[0]}_{lambda_values[0]}_{gamma_values[0]}"]
-df_naive = oo.backtest_bma_naive_df(bma_returns)
-
-methods = {
-    "Prospect Theory": df_pt,
-    "Mean-Variance": df_mvo,
-    "Naive Equal-Weight": df_naive,
-    # later you can add Risk Parity, FF Model, etc.
-}
-
-summary_comparison_df = oo.summarize_methods_comparison(methods, lambda_=1.5, gamma=0.5)
-print(summary_comparison_df)
 
 
-sensitivity_df = oo.sensitivity_analysis_ce(methods, lambda_values=[1.5, 2.0, 2.5, 3.0], gamma=0.5)
-print(sensitivity_df)
+# # Bootstrap backtest for MVO and Naive Equal-Weight (takes a while)
+# mvo_results = oo.bootstrap_backtest(oo.backtest_portfolio_bma_mvo_df, bma_returns, n_runs=1000)
+# naive_results = oo.bootstrap_backtest(oo.backtest_bma_naive_df, bma_returns, n_runs=1000)
 
-vis.plot_returns_vs_pt_value(df_pt, lambda_=1.5, gamma=0.5, method_name="Prospect Theory")
+# print("MVO Summary:")
+# print(oo.summarize_metrics(mvo_results))
 
+# print("\nNaive Equal-Weight Summary:")
+# print(oo.summarize_metrics(naive_results))
+
+# # Plot the distributions of the metrics
+# oo.plot_metric_distributions(mvo_results, "Mean-Variance")
+# oo.plot_metric_distributions(naive_results, "Naive Equal-Weight")
+
+# # Summarize the metrics
+# summary_mvo = oo.summarize_metrics(mvo_results).loc[:, 'Avg']
+# summary_naive = oo.summarize_metrics(naive_results).loc[:, 'Avg']
+
+# # Create DataFrames for the methods
+# df_pt = results_dict_bma[f"{strategies[0]}_{lambda_values[0]}_{gamma_values[0]}"]
+# df_mvo = pd.DataFrame({'Portfolio Returns': [summary_mvo['Mean Return']]})
+# df_naive = pd.DataFrame({'Portfolio Returns': [summary_naive['Mean Return']]})
+
+# methods = {
+#     "Prospect Theory": df_pt,     # from single run
+#     "Mean-Variance": df_mvo,      # now bootstrapped
+#     "Naive Equal-Weight": df_naive
+# }
+
+# summary_comparison_df = oo.summarize_methods_comparison(methods, lambda_=1.5, gamma=0.5)
+# print(summary_comparison_df)
+
+# sensitivity_df = oo.sensitivity_analysis_ce(methods, lambda_values=lambda_values, gamma=gamma_values[0])
+# print(sensitivity_df)
 
 
 # Breakpoint before plots
 breakpoint = 1
 
 ## Plots
+
+vis.plot_returns_vs_pt_value(df_pt, lambda_=1.5, gamma=0.5, method_name="Prospect Theory")
 
 market = po.load_market_benchmark(parent_dir, start_date=start_date, end_date=end_date)
 

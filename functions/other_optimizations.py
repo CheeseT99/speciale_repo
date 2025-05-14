@@ -1,5 +1,6 @@
 from scipy.optimize import minimize
 import numpy as np
+import pandas as pd
 
 
 def optimize_mean_variance(expected_returns, cov_matrix, risk_aversion=3.0):
@@ -35,17 +36,20 @@ def optimize_mean_variance(expected_returns, cov_matrix, risk_aversion=3.0):
     return result.x
 
 
-def backtest_portfolio_bma_mvo(bma_returns: dict, risk_aversion: float = 3.0) -> dict:
+def backtest_portfolio_bma_mvo(bma_returns: dict, risk_aversion: float = 3.0, seed: int = 42) -> dict:
     """
-    Backtest using Mean-Variance optimization on BMA simulated returns.
+    Backtest using Mean-Variance optimization on BMA simulated returns,
+    drawing a single realistic outcome from the posterior predictive distribution.
 
     Args:
-        bma_returns: dict[date] -> (simulated_returns, expected_returns)
-        risk_aversion: Risk aversion coefficient (default = 3.0) - 	DeMiguel, Garlappi, and Uppal (2009) often use γ = 3.
+        bma_returns: dict[date] -> (simulated_returns, expected_returns, covariance)
+        risk_aversion: Risk aversion coefficient (γ)
+        seed: Random seed for reproducibility
 
     Returns:
         results_dict: dict[date] -> dict with realized return, expected return, weights
     """
+    np.random.seed(seed)
     results = {}
 
     dates = list(bma_returns.keys())
@@ -54,22 +58,24 @@ def backtest_portfolio_bma_mvo(bma_returns: dict, risk_aversion: float = 3.0) ->
     for t, current_date in enumerate(dates[:-1]):
         sim_draws, expected_returns, covariance = bma_returns[current_date]
 
-        mean_return = expected_returns.values
-        cov_matrix = covariance
+        mu = expected_returns.values
+        cov = covariance
 
-        # Optimize
-        weights = optimize_mean_variance(mean_return, cov_matrix, risk_aversion)
+        # Optional: regularize covariance matrix to avoid instability
+        cov += 1e-4 * np.eye(len(cov))
 
-        # Next period returns
+        # Step 1: Optimize portfolio weights
+        weights = optimize_mean_variance(mu, cov, risk_aversion)
+
+        # Step 2: Sample ONE realistic outcome from predictive distribution
         next_draws, _, _ = bma_returns[dates[t + 1]]
-        realized_returns = next_draws.mean(axis=0)  # average of simulated returns next period
+        random_index = np.random.randint(next_draws.shape[0])
+        realized_returns = next_draws[random_index]  # shape: (K,)
 
+        # Step 3: Compute return and track results
         portfolio_return = np.dot(realized_returns, weights)
-
         cumulative_return *= (1 + portfolio_return)
-
-        # Expected portfolio return
-        expected_portfolio_return = np.dot(mean_return, weights)
+        expected_portfolio_return = np.dot(mu, weights)
 
         results[current_date] = {
             'Portfolio Return': portfolio_return,
@@ -80,7 +86,7 @@ def backtest_portfolio_bma_mvo(bma_returns: dict, risk_aversion: float = 3.0) ->
 
     return results
 
-import pandas as pd
+
 
 def mvo_results_to_dataframe(results_dict):
     """
@@ -124,9 +130,15 @@ def compute_certainty_equivalent(df, lambda_: float, gamma: float, reference: fl
 
         ce_sum += (gain_term ** (1 - gamma)) / (1 - gamma) - lambda_ * (loss_term ** (1 - gamma)) / (1 - gamma)
 
-    certainty_equivalent = (ce_sum / S) ** (1 / (1 - gamma))
+    avg_utility = ce_sum / S
 
-    return certainty_equivalent - 1  # Normalize so CE is excess over 0
+    if avg_utility >= 0:
+        ce = ((1 - gamma) * avg_utility) ** (1 / (1 - gamma))
+    else:
+        ce = -(((1 - gamma) * (-avg_utility)) / lambda_) ** (1 / (1 - gamma))
+
+    return ce
+
 
 def summarize_backtest(df) -> dict:
     """
@@ -248,18 +260,19 @@ def sensitivity_analysis_ce(methods: dict,
     return pd.DataFrame(rows).set_index('λ')
 
 
-def backtest_bma_naive_df(bma_returns: dict) -> pd.DataFrame:
+def backtest_bma_naive_df(bma_returns: dict, seed: int = 42) -> pd.DataFrame:
     """
-    Backtests the 1/N naive equal-weighted portfolio directly on BMA-simulated returns.
+    Backtests the 1/N naive equal-weighted portfolio using one realistic return draw per period.
 
     Args:
-        bma_returns: OrderedDict[date] -> (simulated_draws, expected_returns)
+        bma_returns: OrderedDict[date] -> (sim_draws, expected_returns, covariance)
+        seed: Random seed for reproducibility
 
     Returns:
-        DataFrame with columns:
+        DataFrame with:
         ['Portfolio Returns', 'Compounded Returns', 'Portfolio Weights', 'Expected Portfolio Returns']
     """
-
+    np.random.seed(seed)
     rows = []
     dates = list(bma_returns.keys())
     num_assets = bma_returns[dates[0]][0].shape[1]
@@ -271,11 +284,14 @@ def backtest_bma_naive_df(bma_returns: dict) -> pd.DataFrame:
         current_date = dates[t]
         next_date = dates[t + 1]
 
-        # Get current expected returns and next realized returns
+        # Expected returns at current date
         _, expected_returns, _ = bma_returns[current_date]
-        next_draws, _, _ = bma_returns[next_date]
 
-        realized_returns = next_draws.mean(axis=0)
+        # Simulate one realized path
+        next_draws, _, _ = bma_returns[next_date]
+        random_index = np.random.randint(next_draws.shape[0])
+        realized_returns = next_draws[random_index]  # shape (num_assets,)
+
         portfolio_return = np.dot(realized_returns, equal_weights)
         expected_return = np.dot(expected_returns.values, equal_weights)
 
@@ -290,5 +306,126 @@ def backtest_bma_naive_df(bma_returns: dict) -> pd.DataFrame:
         })
 
     return pd.DataFrame(rows).set_index('Date')
+
+
+import numpy as np
+import pandas as pd
+from typing import Callable
+from scipy.stats import t
+import matplotlib.pyplot as plt
+
+def compute_metrics(returns: np.ndarray, lambda_=2.25, gamma=0.5, r_hat=0.0):
+    """
+    Compute mean, std, sharpe, certainty equivalent for a return series.
+    """
+    mean = np.mean(returns)
+    std = np.std(returns, ddof=1)
+    sharpe = mean / std if std > 0 else np.nan
+
+    # Certainty Equivalent (Prospect Theory-style)
+    ce_sum = 0
+    S = len(returns)
+    for r in returns:
+        gain = max(0, r - r_hat)
+        loss = max(0, r_hat - r)
+        ce_sum += (gain ** (1 - gamma)) / (1 - gamma) - lambda_ * (loss ** (1 - gamma)) / (1 - gamma)
+    avg_util = ce_sum / S
+    if avg_util >= 0:
+        ce = ((1 - gamma) * avg_util) ** (1 / (1 - gamma))
+    else:
+        ce = -(((1 - gamma) * (-avg_util)) / lambda_) ** (1 / (1 - gamma))
+
+    return {
+        'Mean Return': mean,
+        'Std Dev': std,
+        'Sharpe Ratio': sharpe,
+        'Certainty Equivalent': ce
+    }
+
+def bootstrap_backtest(strategy_func: Callable, bma_returns: dict, n_runs: int = 1000) -> pd.DataFrame:
+    """
+    Bootstraps a backtest by running the strategy n_runs times with different seeds.
+    Returns a DataFrame with metrics for each run.
+    """
+    records = []
+    for i in range(n_runs):
+        df = strategy_func(bma_returns, seed=i)
+        returns = df['Portfolio Returns'].dropna().values
+        metrics = compute_metrics(returns)
+        records.append(metrics)
+
+    return pd.DataFrame(records)
+
+def backtest_portfolio_bma_mvo_df(bma_returns, risk_aversion=3.0, seed=42):
+    """
+    Wraps the MVO dictionary output as a clean DataFrame with expected columns.
+    Ensures compatibility with bootstrap_backtest.
+    """
+    result_dict = backtest_portfolio_bma_mvo(bma_returns, risk_aversion=risk_aversion, seed=seed)
+
+    # Convert to DataFrame
+    df = pd.DataFrame(result_dict).T  # Transpose so timestamps are index
+
+    # Standardize column naming
+    df = df.rename(columns={
+        'Portfolio Return': 'Portfolio Returns'
+    })
+
+    df.index.name = 'Date'
+    return df
+
+def backtest_bma_naive_df(bma_returns, seed=42):
+    """
+    Updated naive backtest to return expected DataFrame structure with realistic simulation.
+    """
+    np.random.seed(seed)
+    rows = []
+    dates = list(bma_returns.keys())
+    num_assets = bma_returns[dates[0]][0].shape[1]
+
+    equal_weights = np.ones(num_assets) / num_assets
+    cumulative_return = 1.0
+
+    for t in range(len(dates) - 1):
+        current_date = dates[t]
+        next_date = dates[t + 1]
+
+        _, expected_returns, _ = bma_returns[current_date]
+        next_draws, _, _ = bma_returns[next_date]
+
+        random_index = np.random.randint(next_draws.shape[0])
+        realized_returns = next_draws[random_index]
+
+        portfolio_return = np.dot(realized_returns, equal_weights)
+        expected_return = np.dot(expected_returns.values, equal_weights)
+
+        cumulative_return *= (1 + portfolio_return)
+
+        rows.append({
+            'Date': current_date,
+            'Portfolio Returns': portfolio_return,
+            'Compounded Returns': cumulative_return,
+            'Portfolio Weights': equal_weights.copy(),
+            'Expected Portfolio Returns': expected_return
+        })
+
+    return pd.DataFrame(rows).set_index('Date')
+
+
+
+def summarize_metrics(df: pd.DataFrame):
+    summary = df.describe(percentiles=[0.025, 0.5, 0.975]).T[['mean', 'std', '2.5%', '50%', '97.5%']]
+    return summary.rename(columns={'mean': 'Avg', 'std': 'SD'})
+
+def plot_metric_distributions(df: pd.DataFrame, strategy_name: str):
+    plt.figure(figsize=(14, 6))
+    for i, col in enumerate(df.columns):
+        plt.subplot(1, len(df.columns), i + 1)
+        plt.hist(df[col], bins=30, alpha=0.7)
+        plt.title(f"{strategy_name} - {col}")
+        plt.axvline(df[col].mean(), color='r', linestyle='--', label='Mean')
+        plt.legend()
+    plt.tight_layout()
+    plt.show()
 
 
