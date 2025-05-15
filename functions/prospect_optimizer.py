@@ -175,18 +175,19 @@ def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservati
     Returns:
     float: The prospect value.
     """
+    
     # Calculate portfolio returns based on weights
     portfolio_returns = np.dot(r_s, weights) #Used to calculate expected returns
     # er mean return for hver måned ved første kørsel af minimizer (lige vægte)
 
     # Calculate zt based on these returns
-    zt = calculate_zt(np.mean(portfolio_returns), r_tminus1)
+    zt = calculate_zt(np.mean(portfolio_returns), r_hat)
 
     # Dynamically adjust lambda based on strategy and portfolio performance
     if strategy == "conservative":
-        lambda_dynamic = calculate_conservative_lambda(r_tminus1, r_tminus2, zt, lambda_)
+        lambda_dynamic = calculate_conservative_lambda(r_tminus1, r_hat, zt, lambda_)
     elif strategy == "aggressive":
-        lambda_dynamic = calculate_aggressive_lambda(r_tminus1, r_tminus2, zt, lambda_)
+        lambda_dynamic = calculate_aggressive_lambda(r_tminus1, r_hat, zt, lambda_)
     else:
         lambda_dynamic = lambda_
 
@@ -502,13 +503,13 @@ def prospect_value_BMA(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conser
     # er mean return for hver måned ved første kørsel af minimizer (lige vægte)
 
     # Calculate zt based on these returns
-    zt = calculate_zt(np.mean(portfolio_returns), r_tminus1)
+    zt = calculate_zt(np.mean(portfolio_returns), r_hat)
 
     # Dynamically adjust lambda based on strategy and portfolio performance
     if strategy == "conservative":
-        lambda_dynamic = calculate_conservative_lambda(r_tminus1, r_tminus2, zt, lambda_)
+        lambda_dynamic = calculate_conservative_lambda(r_tminus1, r_hat, zt, lambda_)
     elif strategy == "aggressive":
-        lambda_dynamic = calculate_aggressive_lambda(r_tminus1, r_tminus2, zt, lambda_)
+        lambda_dynamic = calculate_aggressive_lambda(r_tminus1, r_hat, zt, lambda_)
     else:
         lambda_dynamic = lambda_
 
