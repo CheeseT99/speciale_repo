@@ -47,6 +47,57 @@ def load_historical_returns(parent_dir: str, start_date=None, end_date=None) -> 
 
     return factors
 
+def load_risk_free_rate_from_factors(
+    parent_dir: str,
+    start_date: str = None,
+    end_date: str = None
+) -> pd.Series:
+    """
+    Computes and returns the risk-free rate as a time series from 'factors-20.csv',
+    using the identity: R_f = MKT - (Mkt-RF)
+
+    Args:
+        parent_dir (str): Path to the folder containing 'factors-20.csv'
+        start_date (str): Optional start date (YYYY-MM-DD)
+        end_date (str): Optional end date (YYYY-MM-DD)
+
+    Returns:
+        pd.Series: Risk-free rate time series indexed by date
+    """
+    file_path = os.path.join(parent_dir, "Complemetary Code Files for Submission", "Data", "factors-20.csv")
+
+    # Load and parse
+    df = pd.read_csv(file_path)
+    df['Date'] = pd.to_datetime(df['Date'].astype(str), format='%Y%m')
+    df.set_index('Date', inplace=True)
+    df.sort_index(inplace=True)
+
+    if 'MKT' not in df.columns or 'Mkt-RF' not in df.columns:
+        raise ValueError("Missing required columns: 'MKT' and/or 'Mkt-RF' in factors-20.csv.")
+
+    # Compute risk-free rate
+    risk_free_rate = df['MKT'] - df['Mkt-RF']
+
+    # Apply optional slicing
+    if start_date:
+        risk_free_rate = risk_free_rate.loc[start_date:]
+    if end_date:
+        risk_free_rate = risk_free_rate.loc[:end_date]
+
+    return risk_free_rate
+
+
+def slice_reference(reference_series: pd.Series, start_date: str | pd.Timestamp, end_date: str | pd.Timestamp) -> pd.Series:
+    """
+    Slices the reference series from (start_date + 10 years) to end_date.
+
+    Returns:
+        pd.Series: Time-sliced reference return series.
+    """
+    start = pd.to_datetime(start_date) + pd.DateOffset(years=10)
+    end = pd.to_datetime(end_date)
+    return reference_series.loc[start:end]
+
 
 def load_reference_returns(parent_dir: str, ref_type: str = "market", start_date=None, end_date=None) -> dict:
     """
@@ -93,23 +144,34 @@ def load_reference_returns(parent_dir: str, ref_type: str = "market", start_date
     return returns.to_dict()
 
 
-def load_test_assets_and_factors(parent_dir: str, start_date=None, end_date=None) -> tuple[pd.DataFrame, pd.DataFrame]:
+
+def load_test_assets_and_factors(
+    parent_dir: str,
+    historical_returns: pd.DataFrame,
+    start_date=None,
+    end_date=None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Loads both test asset returns and regression factor returns
-    from 'factors-20.csv'.
+    from 'factors-20.csv', using the asset names from historical_returns.
 
     Args:
         parent_dir: path to folder containing factors-20.csv
+        historical_returns: DataFrame whose columns define which test assets to load
         start_date: optional start filter (YYYY-MM-DD)
         end_date: optional end filter (YYYY-MM-DD)
 
     Returns:
         (test_assets_df, factor_returns_df): tuple of two DataFrames
-            - test_assets_df: returns of SMB, HML, RMW, CMA, MMOM
+            - test_assets_df: returns of the assets in historical_returns.columns
             - factor_returns_df: returns of Mkt-RF, IA, ROE
     """
-
-    factors_path = os.path.join(parent_dir, "Complemetary Code Files for Submission", "Data", "factors-20.csv")
+    factors_path = os.path.join(
+        parent_dir,
+        "Complemetary Code Files for Submission",
+        "Data",
+        "factors-20.csv"
+    )
 
     factors = pd.read_csv(factors_path)
 
@@ -118,12 +180,17 @@ def load_test_assets_and_factors(parent_dir: str, start_date=None, end_date=None
     factors.set_index('Date', inplace=True)
     factors.sort_index(inplace=True)
 
-    # Select test asset columns
-    test_asset_columns = ['SMB', 'HML', 'RMW', 'CMA', 'MMOM']
-    test_assets = factors[test_asset_columns]
+    # Select only those columns available in the CSV
+    available_columns = set(factors.columns)
+    requested_assets = [col for col in historical_returns.columns if col in available_columns]
 
-    # Select regression factor columns
-    factor_columns = ['Mkt-RF', 'IA', 'ROE']
+    if not requested_assets:
+        raise ValueError("None of the columns in historical_returns are present in factors-20.csv.")
+
+    test_assets = factors[requested_assets]
+
+    # Select fixed factor columns according to largest posterior probs
+    factor_columns = ['Mkt-RF', 'PEAD', 'QMJ']
     factor_returns = factors[factor_columns]
 
     # Optional slicing
@@ -135,6 +202,7 @@ def load_test_assets_and_factors(parent_dir: str, start_date=None, end_date=None
         factor_returns = factor_returns.loc[:end_date]
 
     return test_assets, factor_returns
+
 
 
 
@@ -572,16 +640,18 @@ def backtest_portfolio_bma(
 ) -> pd.DataFrame:
     """
     Backtest portfolio using prospect theory on simulated BMA return draws.
-    Will cache to pickle if pickle_path_backtest is provided.
+    Uses a fixed inflation-based reference return of ~0.165% per month.
 
     Returns:
         pd.DataFrame with ['Portfolio Returns', 'Compounded Returns', 'Portfolio Weights', 'r_hat']
     """
-
     if pickle_path_backtest is not None and os.path.exists(pickle_path_backtest):
         print(f"Loading cached backtest from: {pickle_path_backtest}")
         with open(pickle_path_backtest, "rb") as f:
             return pkl.load(f)
+
+    # Fixed reference return based on 2% annual inflation
+    reference_return = 1.02**(1/12) - 1  # ≈ 0.00165
 
     dates = list(bma_returns.keys())
     portfolio_returns = []
@@ -598,7 +668,8 @@ def backtest_portfolio_bma(
         print(f"Backtesting {current_date.strftime('%Y-%m')}")
 
         r_s, expected_returns, bma_covariance = bma_returns[current_date]
-        r_hat = r_tminus1
+
+        r_hat = reference_return  # ✅ Fixed inflation-based reference
         r_hat_values.append(r_hat)
 
         result = optimize_portfolio(
@@ -612,36 +683,33 @@ def backtest_portfolio_bma(
             BMA=True
         )
         weights = [round(w, 4) for w in result.x]
-        print(f"Optimized Weights: {weights} prospect_value")
+        print(f"Optimized Weights: {weights}")
         portfolio_weights.append(weights)
 
         next_date = dates[t + 1]
-        next_r_s, _,_ = bma_returns[next_date]
+        next_r_s, _, _ = bma_returns[next_date]
 
-        N = expected_returns.index
-        true_return = true_returns.loc[current_date][N]
+        asset_names = expected_returns.index
+        true_return = true_returns.loc[current_date][asset_names]
 
-        # Calculate portfolio return
-        # portfolio_return = weights * rigtige returns
         portfolio_return = np.dot(true_return, weights)
-
         portfolio_returns.append(portfolio_return)
+
         cumulative_return *= (1 + portfolio_return)
         compounded_returns.append(cumulative_return)
 
-        # Compute expected portfolio return (ex-ante forecast)
         expected_portfolio_return = np.dot(expected_returns.values, weights)
         expected_portfolio_returns.append(expected_portfolio_return)
-        
+
         r_tminus2 = r_tminus1
-        r_tminus1 = portfolio_return #Aendr dette
+        r_tminus1 = portfolio_return
 
     result_df = pd.DataFrame({
         'Portfolio Returns': portfolio_returns,
         'Compounded Returns': compounded_returns,
         'Portfolio Weights': portfolio_weights,
         'Expected Portfolio Returns': expected_portfolio_returns,
-        'r_hat': r_hat_values
+        'Reference Return': r_hat_values
     }, index=dates[1:])
 
     if pickle_path_backtest is not None:
@@ -649,6 +717,7 @@ def backtest_portfolio_bma(
             pkl.dump(result_df, f)
 
     return result_df
+
 
 #Taget fra min bachelor
 def maximize_sharp_ratio_no_spec(port_return: pd.DataFrame, 
@@ -675,7 +744,6 @@ def maximize_sharp_ratio_no_spec(port_return: pd.DataFrame,
    
     return result.x
 
-
 def backtest_portfolio_bma_maxsharpe(
     bma_returns: OrderedDict,
     true_returns: pd.Series,
@@ -683,20 +751,19 @@ def backtest_portfolio_bma_maxsharpe(
     lambda_=1,
     gamma=0.9,
     pickle_path_backtest: str = None,
-    bounds=Bounds(0, 1) # We set at no long short positions, but this can be changed to allow for shorting
+    bounds=Bounds(0, 1)
 ) -> pd.DataFrame:
     """
-    Backtest portfolio using prospect theory on simulated BMA return draws.
-    Will cache to pickle if pickle_path_backtest is provided.
-
-    Returns:
-        pd.DataFrame with ['Portfolio Returns', 'Compounded Returns', 'Portfolio Weights', 'r_hat']
+    Backtest portfolio using max Sharpe ratio on BMA estimates.
+    Uses a fixed inflation-based reference return for CE evaluation only.
     """
-
     if pickle_path_backtest is not None and os.path.exists(pickle_path_backtest):
         print(f"Loading cached backtest from: {pickle_path_backtest}")
         with open(pickle_path_backtest, "rb") as f:
             return pkl.load(f)
+
+    # Fixed reference return from 2% annual inflation
+    reference_return = 1.02**(1/12) - 1
 
     dates = list(bma_returns.keys())
     portfolio_returns = []
@@ -713,47 +780,44 @@ def backtest_portfolio_bma_maxsharpe(
         print(f"Backtesting {current_date.strftime('%Y-%m')}")
 
         r_s, expected_returns, bma_covariance = bma_returns[current_date]
-        r_hat = r_tminus1
-        r_hat_values.append(r_hat)
         w0 = np.linspace(start=1, stop=0, num=bma_covariance.shape[1])
-        x0 = w0/np.sum(w0)
+        x0 = w0 / np.sum(w0)
 
+        # === Step 1: Optimize max Sharpe ===
         result = maximize_sharp_ratio_no_spec(
-            expected_returns, bma_covariance, x0, bounds  
+            expected_returns, bma_covariance, x0, bounds
         )
         weights = [round(w, 4) for w in result]
-
-        print(f"Optimal weights: {weights}")
         portfolio_weights.append(weights)
+        print(f"Optimal weights: {weights}")
 
+        # === Step 2: Realized return
         next_date = dates[t + 1]
-        next_r_s, _,_ = bma_returns[next_date]
+        next_r_s, _, _ = bma_returns[next_date]
+        asset_names = expected_returns.index
+        true_return = true_returns.loc[current_date][asset_names]
 
-        N = expected_returns.index
-        true_return = true_returns.loc[current_date][N]
-
-        # Calculate portfolio return
-        # portfolio_return = weights * rigtige returns
         portfolio_return = np.dot(true_return, weights)
-
         portfolio_returns.append(portfolio_return)
-        cumulative_return *= (1 + portfolio_return)
-        compounded_returns.append(cumulative_return)
-        
 
-        # Compute expected portfolio return (ex-ante forecast)
+        # === Step 3: Expected return + fixed reference
         expected_portfolio_return = np.dot(expected_returns.values, weights)
         expected_portfolio_returns.append(expected_portfolio_return)
-        
+
+        r_hat_values.append(reference_return)  # ✅ fixed reference for CE
+
+        cumulative_return *= (1 + portfolio_return)
+
         r_tminus2 = r_tminus1
         r_tminus1 = portfolio_return
+        compounded_returns.append(cumulative_return)
 
     result_df = pd.DataFrame({
         'Portfolio Returns': portfolio_returns,
         'Compounded Returns': compounded_returns,
         'Portfolio Weights': portfolio_weights,
         'Expected Portfolio Returns': expected_portfolio_returns,
-        'r_hat': r_hat_values
+        'Reference Return': r_hat_values
     }, index=dates[1:])
 
     if pickle_path_backtest is not None:
@@ -764,7 +828,9 @@ def backtest_portfolio_bma_maxsharpe(
 
 
 
-def resultgenerator_bma(lambda_values, gamma_values, bma_returns, true_returns, strategies, date_tag: str, cache_dir="./bma_cache"):
+
+
+def resultgenerator_bma(lambda_values, gamma_values, bma_returns, true_returns, strategies, date_tag: str, cache_dir="backtest_caches/bma_cache"):
     """
     Runs backtests over a grid of (lambda, gamma, strategy) using BMA-simulated returns.
     Each result is cached to a .pkl and returned in a dictionary.
@@ -802,7 +868,7 @@ def resultgenerator_bma(lambda_values, gamma_values, bma_returns, true_returns, 
     return results_dict
 
 
-def resultgenerator_bma_maxsharpe(lambda_values, gamma_values, bma_returns, true_returns, strategies, date_tag: str, cache_dir="./bma_cache_maxsharpe"):
+def resultgenerator_bma_maxsharpe(lambda_values, gamma_values, bma_returns, true_returns, strategies, date_tag: str, cache_dir="backtest_caches/bma_cache_maxsharpe"):
     """
     Runs backtests over a grid of (lambda, gamma, strategy) using BMA-simulated returns.
     Each result is cached to a .pkl and returned in a dictionary.
@@ -850,9 +916,8 @@ def backtest_portfolio_historical_mean(
 ) -> pd.DataFrame:
     """
     Backtest portfolio using historical mean return estimates.
-    Uses a rolling lookback window to estimate expected returns.
+    Uses a rolling lookback window and a fixed inflation-based reference return.
     """
-
     if pickle_path_backtest is not None and os.path.exists(pickle_path_backtest):
         print(f"Loading cached historical mean backtest from: {pickle_path_backtest}")
         with open(pickle_path_backtest, "rb") as f:
@@ -871,6 +936,9 @@ def backtest_portfolio_historical_mean(
     r_tminus1 = 0.0
     r_tminus2 = 0.0
 
+    # Set fixed reference return based on inflation
+    reference_return = 1.02**(1/12) - 1
+
     for t in range(lookback_period, len(dates) - 1):
         current_date = dates[t]
         print(f"Backtesting {current_date.strftime('%Y-%m')}")
@@ -887,7 +955,7 @@ def backtest_portfolio_historical_mean(
         # Optimize
         result = optimize_portfolio(
             r_s=np.random.multivariate_normal(expected_returns.values, past_returns.cov(), size=10000),
-            r_hat=r_tminus1,
+            r_hat=reference_return,
             lambda_=lambda_,
             strategy=strategy,
             gamma=gamma,
@@ -904,11 +972,10 @@ def backtest_portfolio_historical_mean(
         expected_portfolio_return = np.dot(expected_returns.values, weights)
         expected_portfolio_returns.append(expected_portfolio_return)
 
-
         cumulative_return *= (1 + portfolio_return)
         compounded_returns.append(cumulative_return)
 
-        r_hat_values.append(r_tminus1)
+        r_hat_values.append(reference_return)
         r_tminus2 = r_tminus1
         r_tminus1 = portfolio_return
 
@@ -917,8 +984,8 @@ def backtest_portfolio_historical_mean(
         'Compounded Returns': compounded_returns,
         'Portfolio Weights': portfolio_weights,
         'Expected Portfolio Returns': expected_portfolio_returns,
-        'r_hat': r_hat_values
-    }, index=dates[lookback_period+1:])
+        'Reference Return': r_hat_values
+    }, index=dates[lookback_period + 1:])
 
     if pickle_path_backtest is not None:
         with open(pickle_path_backtest, "wb") as f:
@@ -928,7 +995,9 @@ def backtest_portfolio_historical_mean(
 
 
 
-def resultgenerator_historical_mean(lambda_values, gamma_values, historical_returns, strategies, date_tag: str, cache_dir="./historical_mean_cache"):
+
+
+def resultgenerator_historical_mean(lambda_values, gamma_values, historical_returns, strategies, date_tag: str, cache_dir="backtest_caches/historical_mean_cache"):
     """
     Runs backtests over a grid of (lambda, gamma, strategy) using Historical Sample Mean returns.
     """
@@ -963,24 +1032,25 @@ def resultgenerator_historical_mean(lambda_values, gamma_values, historical_retu
 
     return results_dict
 
-
 def backtest_portfolio_mvp(
     historical_returns: pd.DataFrame,
-    strategy="conservative",
-    lambda_=1,
-    gamma=0.9,
+    strategy="conservative",  # not used in MVP, included for API consistency
+    lambda_=1,                # not used in MVP
+    gamma=0.9,                # not used in MVP
     lookback_period: int = 120,
     pickle_path_backtest: str = None
 ) -> pd.DataFrame:
     """
     Backtest Minimum Variance Portfolio (MVP) without expected returns.
-    NOTE: We don't use optimize_portfolio() here, since returns doesn't matter in MVP, ONLY minimized variance.
+    Uses a fixed inflation-based reference return for CE evaluation purposes only.
     """
-
     if pickle_path_backtest is not None and os.path.exists(pickle_path_backtest):
         print(f"Loading cached MVP backtest from: {pickle_path_backtest}")
         with open(pickle_path_backtest, "rb") as f:
             return pkl.load(f)
+
+    # Fixed reference return based on 2% annual inflation
+    reference_return = 1.02**(1/12) - 1
 
     dates = historical_returns.index
     num_assets = historical_returns.shape[1]
@@ -988,7 +1058,7 @@ def backtest_portfolio_mvp(
     portfolio_returns = []
     compounded_returns = []
     portfolio_weights = []
-    r_hat_values = []
+    reference_series = []
 
     cumulative_return = 1.0
     r_tminus1 = 0.0
@@ -998,11 +1068,11 @@ def backtest_portfolio_mvp(
         current_date = dates[t]
         print(f"Backtesting {current_date.strftime('%Y-%m')}")
 
-        # Lookback returns
+        # === Lookback returns ===
         past_returns = historical_returns.iloc[t - lookback_period:t]
         cov_matrix = past_returns.cov()
 
-        # === Optimize MVP ===
+        # === MVP Optimization ===
         def portfolio_variance(weights):
             return weights.T @ cov_matrix.values @ weights
 
@@ -1011,20 +1081,20 @@ def backtest_portfolio_mvp(
         initial_weights = np.ones(num_assets) / num_assets
 
         result = minimize(portfolio_variance, initial_weights, bounds=bounds, constraints=constraints)
-
         weights = [round(w, 4) for w in result.x]
         portfolio_weights.append(weights)
 
-        # === Next period realized returns
+        # === Realized next-period return ===
         next_returns = historical_returns.iloc[t + 1]
-
         portfolio_return = np.dot(next_returns.values, weights)
         portfolio_returns.append(portfolio_return)
+
+        # === Append fixed reference return ===
+        reference_series.append(reference_return)
 
         cumulative_return *= (1 + portfolio_return)
         compounded_returns.append(cumulative_return)
 
-        r_hat_values.append(r_tminus1)
         r_tminus2 = r_tminus1
         r_tminus1 = portfolio_return
 
@@ -1032,8 +1102,8 @@ def backtest_portfolio_mvp(
         'Portfolio Returns': portfolio_returns,
         'Compounded Returns': compounded_returns,
         'Portfolio Weights': portfolio_weights,
-        'r_hat': r_hat_values
-    }, index=dates[lookback_period+1:])
+        'Reference Return': reference_series
+    }, index=dates[lookback_period + 1:])
 
     if pickle_path_backtest is not None:
         with open(pickle_path_backtest, "wb") as f:
@@ -1046,7 +1116,9 @@ def backtest_portfolio_mvp(
 
 
 
-def resultgenerator_mvp(lambda_values, gamma_values, historical_returns, strategies, date_tag: str, cache_dir="./mvp_cache"):
+
+
+def resultgenerator_mvp(lambda_values, gamma_values, historical_returns, strategies, date_tag: str, cache_dir="backtest_caches/mvp_cache"):
     """
     Runs MVP backtests over (lambda, gamma, strategy) grid.
     """
@@ -1087,21 +1159,22 @@ def resultgenerator_mvp(lambda_values, gamma_values, historical_returns, strateg
 
 def backtest_portfolio_max_sharpe(
     historical_returns: pd.DataFrame,
-    strategy="conservative",
+    strategy="conservative",  # for consistency only
     lambda_=1,
     gamma=0.9,
     lookback_period: int = 120,
     pickle_path_backtest: str = None
 ) -> pd.DataFrame:
     """
-    Backtest Minimum Variance Portfolio (MVP) without expected returns.
-    NOTE: We don't use optimize_portfolio() here, since returns doesn't matter in MVP, ONLY minimized variance.
+    Backtest max Sharpe portfolio using historical means and covariances.
+    Uses a fixed inflation-based reference return for CE evaluation only.
     """
-
     if pickle_path_backtest is not None and os.path.exists(pickle_path_backtest):
-        print(f"Loading cached MVP backtest from: {pickle_path_backtest}")
+        print(f"Loading cached max Sharpe backtest from: {pickle_path_backtest}")
         with open(pickle_path_backtest, "rb") as f:
             return pkl.load(f)
+
+    reference_return = 1.02**(1/12) - 1  # ≈ 0.00165 monthly
 
     dates = historical_returns.index
     num_assets = historical_returns.shape[1]
@@ -1109,7 +1182,8 @@ def backtest_portfolio_max_sharpe(
     portfolio_returns = []
     compounded_returns = []
     portfolio_weights = []
-    r_hat_values = []
+    expected_portfolio_returns = []
+    reference_series = []
 
     cumulative_return = 1.0
     r_tminus1 = 0.0
@@ -1119,31 +1193,35 @@ def backtest_portfolio_max_sharpe(
         current_date = dates[t]
         print(f"Backtesting {current_date.strftime('%Y-%m')}")
 
-        # Lookback returns
         past_returns = historical_returns.iloc[t - lookback_period:t]
-        cov_matrix = past_returns.cov()
         expected_returns = past_returns.mean()
+        cov_matrix = past_returns.cov()
 
-       
+        # === Max Sharpe Optimization ===
+        def negative_sharpe(weights):
+            port_ret = np.dot(weights, expected_returns.values)
+            port_std = np.sqrt(weights.T @ cov_matrix.values @ weights)
+            return -port_ret / port_std
+
+        constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]
+        bounds = [(0, 1) for _ in range(num_assets)]
         initial_weights = np.ones(num_assets) / num_assets
 
-        result = result = maximize_sharp_ratio_no_spec(
-            expected_returns, cov_matrix, initial_weights, Bounds(0, 1)  
-        )
-
-        weights = [round(w, 4) for w in result]
+        result = minimize(negative_sharpe, initial_weights, bounds=bounds, constraints=constraints)
+        weights = [round(w, 4) for w in result.x]
         portfolio_weights.append(weights)
 
-        # === Next period realized returns
         next_returns = historical_returns.iloc[t + 1]
-
         portfolio_return = np.dot(next_returns.values, weights)
         portfolio_returns.append(portfolio_return)
 
+        expected_portfolio_return = np.dot(expected_returns.values, weights)
+        expected_portfolio_returns.append(expected_portfolio_return)
+
+        reference_series.append(reference_return)
         cumulative_return *= (1 + portfolio_return)
         compounded_returns.append(cumulative_return)
 
-        r_hat_values.append(r_tminus1)
         r_tminus2 = r_tminus1
         r_tminus1 = portfolio_return
 
@@ -1151,8 +1229,9 @@ def backtest_portfolio_max_sharpe(
         'Portfolio Returns': portfolio_returns,
         'Compounded Returns': compounded_returns,
         'Portfolio Weights': portfolio_weights,
-        'r_hat': r_hat_values
-    }, index=dates[lookback_period+1:])
+        'Expected Portfolio Returns': expected_portfolio_returns,
+        'Reference Return': reference_series
+    }, index=dates[lookback_period + 1:])
 
     if pickle_path_backtest is not None:
         with open(pickle_path_backtest, "wb") as f:
@@ -1165,7 +1244,8 @@ def backtest_portfolio_max_sharpe(
 
 
 
-def resultgenerator_max_sharpe(lambda_values, gamma_values, historical_returns, strategies, date_tag: str, cache_dir="./max_sharpe_cache"):
+
+def resultgenerator_max_sharpe(lambda_values, gamma_values, historical_returns, strategies, date_tag: str, cache_dir="backtest_caches/max_sharpe_cache"):
     """
     Runs MVP backtests over (lambda, gamma, strategy) grid.
     """
@@ -1244,6 +1324,7 @@ def estimate_factor_model_expected_returns(
 
     return pd.Series(expected_returns)
 
+
 def backtest_portfolio_factor_model(
     test_assets_returns: pd.DataFrame,
     factor_returns: pd.DataFrame,
@@ -1255,12 +1336,15 @@ def backtest_portfolio_factor_model(
 ) -> pd.DataFrame:
     """
     Backtest using expected returns derived from a factor model (modified Fama-French structure).
+    Uses a fixed inflation-based reference return for CE evaluation and PT optimization.
     """
-
     if pickle_path_backtest is not None and os.path.exists(pickle_path_backtest):
         print(f"Loading cached factor model backtest from: {pickle_path_backtest}")
         with open(pickle_path_backtest, "rb") as f:
             return pkl.load(f)
+
+    # Fixed reference return based on 2% annual inflation
+    reference_return = 1.02**(1/12) - 1
 
     dates = test_assets_returns.index
     num_assets = test_assets_returns.shape[1]
@@ -1268,8 +1352,8 @@ def backtest_portfolio_factor_model(
     portfolio_returns = []
     compounded_returns = []
     portfolio_weights = []
-    r_hat_values = []
     expected_portfolio_returns = []
+    reference_series = []
 
     cumulative_return = 1.0
     r_tminus1 = 0.0
@@ -1279,11 +1363,11 @@ def backtest_portfolio_factor_model(
         current_date = dates[t]
         print(f"Backtesting {current_date.strftime('%Y-%m')}")
 
-        # Lookback window
+        # === Step 0: Lookback window ===
         past_asset_returns = test_assets_returns.iloc[t - lookback_period:t]
         past_factor_returns = factor_returns.iloc[t - lookback_period:t]
 
-        # === Step 1: Estimate Betas and Expected Returns ===
+        # === Step 1: Estimate betas and expected returns ===
         expected_returns = {}
 
         for asset in past_asset_returns.columns:
@@ -1292,22 +1376,22 @@ def backtest_portfolio_factor_model(
 
             model = LinearRegression().fit(X, y)
             betas = model.coef_
-
             expected_factor_premia = past_factor_returns.mean().values
             implied_return = np.dot(betas, expected_factor_premia)
-
             expected_returns[asset] = implied_return
 
         expected_returns = pd.Series(expected_returns)
 
-        # === Step 2: Simulate returns ===
+        # === Step 2: Simulate return draws ===
         cov_matrix = past_asset_returns.cov()
-        simulated_returns = np.random.multivariate_normal(expected_returns.values, cov_matrix.values, size=10000)
+        simulated_returns = np.random.multivariate_normal(
+            expected_returns.values, cov_matrix.values, size=10000
+        )
 
-        # === Step 3: Optimize portfolio ===
+        # === Step 3: Optimize using PT objective ===
         result = optimize_portfolio(
             r_s=simulated_returns,
-            r_hat=r_tminus1,
+            r_hat=reference_return,
             lambda_=lambda_,
             strategy=strategy,
             gamma=gamma,
@@ -1320,17 +1404,16 @@ def backtest_portfolio_factor_model(
 
         # === Step 4: Realized next-period return
         next_returns = test_assets_returns.iloc[t + 1]
-
         portfolio_return = np.dot(next_returns.values, weights)
         portfolio_returns.append(portfolio_return)
+
         expected_portfolio_return = np.dot(expected_returns.values, weights)
         expected_portfolio_returns.append(expected_portfolio_return)
 
-
         cumulative_return *= (1 + portfolio_return)
         compounded_returns.append(cumulative_return)
+        reference_series.append(reference_return)
 
-        r_hat_values.append(r_tminus1)
         r_tminus2 = r_tminus1
         r_tminus1 = portfolio_return
 
@@ -1339,8 +1422,8 @@ def backtest_portfolio_factor_model(
         'Compounded Returns': compounded_returns,
         'Portfolio Weights': portfolio_weights,
         'Expected Portfolio Returns': expected_portfolio_returns,
-        'r_hat': r_hat_values
-    }, index=dates[lookback_period+1:])
+        'Reference Return': reference_series
+    }, index=dates[lookback_period + 1:])
 
     if pickle_path_backtest is not None:
         with open(pickle_path_backtest, "wb") as f:
@@ -1348,14 +1431,18 @@ def backtest_portfolio_factor_model(
 
     return result_df
 
+
+
+
 def resultgenerator_factor_model(
     lambda_values,
     gamma_values,
     test_assets_returns,
     factor_returns,
+    reference_series,
     strategies,
     date_tag: str,
-    cache_dir="./factor_model_cache"
+    cache_dir="backtest_caches/factor_model_cache"
 ) -> dict[str, pd.DataFrame]:
     """
     Runs factor model-based backtests over (lambda, gamma, strategy) grid.
@@ -1402,6 +1489,7 @@ def naive_equal_weight_portfolio(
     """
     Computes the naive equal-weighted (1/N) portfolio returns over time,
     starting from (start_date + 10 years) to match BMA evaluation window.
+    Uses a fixed inflation-based reference return for CE evaluation.
 
     Args:
         returns: DataFrame of asset returns (rows = time, columns = assets)
@@ -1413,23 +1501,28 @@ def naive_equal_weight_portfolio(
         - 'Portfolio Returns': equal-weighted return at each time
         - 'Compounded Returns': cumulative return path
         - 'Portfolio Weights': constant equal weights
+        - 'Reference Return': fixed inflation benchmark
     """
     start_dt = pd.to_datetime(start_date) + pd.DateOffset(years=10)
     end_dt = pd.to_datetime(end_date)
 
     sliced_returns = returns.loc[start_dt:end_dt]
-
     n_assets = sliced_returns.shape[1]
     equal_weights = np.ones(n_assets) / n_assets
 
     portfolio_returns = sliced_returns @ equal_weights
     compounded_returns = (1 + portfolio_returns).cumprod()
 
+    reference_return = 1.02**(1/12) - 1
+    reference_series = [reference_return] * len(portfolio_returns)
+
     return pd.DataFrame({
         'Portfolio Returns': portfolio_returns,
         'Compounded Returns': compounded_returns,
         'Portfolio Weights': [equal_weights] * len(portfolio_returns),
+        'Reference Return': reference_series
     }, index=sliced_returns.index)
+
 
 
 
@@ -1553,7 +1646,7 @@ def resultgenerator_bma_dynamic_rhat(
     bma_returns,
     strategies,
     date_tag: str,
-    cache_dir="./bma_cache",
+    cache_dir="backtest_caches/bma_cache",
     reference_rule="prev_portfolio",
     market_returns: dict = None
 ) -> dict[str, pd.DataFrame]:

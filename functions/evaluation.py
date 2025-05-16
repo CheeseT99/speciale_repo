@@ -19,11 +19,29 @@ def prospect_theory_value(r: float, reference: float, lambda_: float, gamma: flo
     else:
         return -lambda_ * ((-delta) ** (1 - gamma)) / (1 - gamma) if gamma != 1 else -lambda_ * np.log(1 - delta)
 
-def calculate_certainty_equivalent(returns: pd.Series, lambda_: float, gamma: float, reference: float = 0.0) -> float:
-    utilities = [
-        prospect_theory_value(r, reference=reference, lambda_=lambda_, gamma=gamma)
-        for r in returns
-    ]
+def calculate_certainty_equivalent(
+    returns: pd.Series,
+    lambda_: float,
+    gamma: float,
+    reference: float | pd.Series = 0.0
+) -> float:
+    """
+    Computes the Certainty Equivalent under Prospect Theory preferences.
+    Supports both scalar and time-varying (Series) reference returns.
+    """
+    if isinstance(reference, pd.Series):
+        # Elementwise utility with time-varying reference
+        utilities = [
+            prospect_theory_value(r, reference=ref, lambda_=lambda_, gamma=gamma)
+            for r, ref in zip(returns, reference)
+        ]
+    else:
+        # Scalar reference applied to all
+        utilities = [
+            prospect_theory_value(r, reference=reference, lambda_=lambda_, gamma=gamma)
+            for r in returns
+        ]
+
     avg_utility = np.mean(utilities)
 
     # Invert utility function to get certainty equivalent
@@ -35,22 +53,41 @@ def calculate_certainty_equivalent(returns: pd.Series, lambda_: float, gamma: fl
     return ce
 
 
-def compute_certainty_equivalents(results_dict: dict[str, pd.DataFrame], reference: float = 0.0) -> pd.DataFrame:
-    """
-    Applies the PT CE calculation to each strategy in results_dict.
 
-    Returns a DataFrame with welfare rankings (CE) per strategy.
+def compute_certainty_equivalents(
+    results_dict: dict[str, pd.DataFrame],
+    reference_series: pd.Series
+) -> pd.DataFrame:
+    """
+    Computes the Prospect Theory Certainty Equivalent (CE) for each strategy in results_dict.
+    The reference return is a time-varying series passed explicitly as `reference_series`.
+
+    Args:
+        results_dict (dict): Dictionary mapping strategy keys (e.g., "strategy_lambda_gamma")
+                             to DataFrames containing a 'Portfolio Returns' column.
+        reference_series (pd.Series): Series of time-varying reference returns (index-aligned to portfolio returns).
+
+    Returns:
+        pd.DataFrame: Ranked DataFrame with CE values for each strategy.
     """
     ce_list = []
 
     for key, df in results_dict.items():
-        # Extract λ and γ from the key: "strategy_lambda_gamma"
-        _, lam_str, gamma_str = key.split('_')
-        lam = float(lam_str)
-        gamma = float(gamma_str)
+        # Extract λ and γ from strategy key
+        try:
+            _, lam_str, gamma_str = key.split('_')
+            lam = float(lam_str)
+            gamma = float(gamma_str)
+        except ValueError:
+            raise ValueError(f"Expected key format 'strategy_lambda_gamma', but got '{key}'")
+
         returns = df['Portfolio Returns']
 
-        ce = calculate_certainty_equivalent(returns, lambda_=lam, gamma=gamma, reference=reference)
+        # Align the reference to the return index
+        aligned_reference = reference_series.loc[returns.index]
+
+        # Compute CE using the aligned, time-varying reference
+        ce = calculate_certainty_equivalent(returns, lambda_=lam, gamma=gamma, reference=aligned_reference)
 
         ce_list.append({
             'Strategy_Key': key,
@@ -63,36 +100,50 @@ def compute_certainty_equivalents(results_dict: dict[str, pd.DataFrame], referen
     return ce_df
 
 
-def compare_certainty_equivalents(results_by_method: dict[str, dict[str, pd.DataFrame]], reference: float = 0.0) -> pd.DataFrame:
+def compare_certainty_equivalents(
+    results_by_method: dict[str, dict[str, pd.DataFrame]],
+    reference_series: pd.Series
+) -> pd.DataFrame:
     """
-    Compares Certainty Equivalents across multiple return estimation methods.
+    Compares Prospect Theory Certainty Equivalents across multiple return estimation methods,
+    using a time-varying reference return.
 
     Args:
-        results_by_method: dictionary where
-            key = method name (e.g., 'BMA', 'Historical Mean', 'MVP')
-            value = results_dict from that method
-        reference: reference return level for CE calculation (default = 0)
+        results_by_method (dict): Nested dictionary:
+            - Outer key = method name (e.g., 'BMA', 'Historical Mean', etc.)
+            - Outer value = inner dictionary of strategy results
+            - Inner key = strategy identifier string like 'strategy_lambda_gamma'
+            - Inner value = DataFrame with 'Portfolio Returns' column
+        reference_series (pd.Series): Time-varying reference return (aligned to index of returns).
 
     Returns:
-        pd.DataFrame with Strategy_Key, Lambda, Gamma, Method, Certainty Equivalent
+        pd.DataFrame: Multi-method CE comparison with Lambda, Gamma, Strategy, Method, CE.
     """
     ce_rows = []
 
-    # Assume all methods have roughly the same strategy keys
+    # Get common strategy keys across all methods
     all_strategy_keys = set.intersection(*[set(r.keys()) for r in results_by_method.values()])
 
-    for key in all_strategy_keys:
-        lam = float(key.split("_")[1])
-        gamma = float(key.split("_")[2])
-        strategy = key.split("_")[0]
+    for strategy_key in all_strategy_keys:
+        try:
+            strategy, lam_str, gamma_str = strategy_key.split('_')
+            lam = float(lam_str)
+            gamma = float(gamma_str)
+        except ValueError:
+            raise ValueError(f"Expected strategy key format 'strategy_lambda_gamma', got: '{strategy_key}'")
 
-        for method_name, results_dict in results_by_method.items():
-            df = results_dict[key]
+        for method_name, strategy_dict in results_by_method.items():
+            df = strategy_dict[strategy_key]
 
-            ce = calculate_certainty_equivalent(df['Portfolio Returns'], lambda_=lam, gamma=gamma, reference=reference)
+            returns = df['Portfolio Returns']
+            aligned_reference = reference_series.loc[returns.index]
+
+            ce = calculate_certainty_equivalent(
+                returns, lambda_=lam, gamma=gamma, reference=0.0017
+            )
 
             ce_rows.append({
-                'Strategy_Key': key,
+                'Strategy_Key': strategy_key,
                 'Strategy': strategy,
                 'Lambda': lam,
                 'Gamma': gamma,
@@ -102,6 +153,7 @@ def compare_certainty_equivalents(results_by_method: dict[str, dict[str, pd.Data
 
     ce_df = pd.DataFrame(ce_rows).set_index('Strategy_Key')
     return ce_df.sort_values(by=["Lambda", "Gamma", "Strategy", "Method"])
+
 
 
 def summarize_certainty_equivalents(ce_combined_df: pd.DataFrame) -> pd.DataFrame:
