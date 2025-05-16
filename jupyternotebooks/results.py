@@ -41,9 +41,9 @@ parent_dir = os.getcwd() # speciale_repo
 #############################################################
 
 #TESTING PARAMETERS
-strategies = ["conservative"]
-lambda_values = [1.99]
-gamma_values = [0.2]
+strategies = ["conservative", "aggressive"]
+lambda_values = [1.99, 2.25]
+gamma_values = [0.12,0.25]
 
 
 #############Test dates#################
@@ -75,9 +75,9 @@ date_tag = f"{start_date}_{end_date}"
 # min_obs = 120
 
 # Changeable?
-r_hat = 0.0  # Reference return
-lambda_ = 2  # Base loss aversion coefficient
-n_predictors_to_use = 2 
+#r_hat = 0.0  # Reference return
+#lambda_ = 2  # Base loss aversion coefficient
+#n_predictors_to_use = 2 
 
 # strategies = ["conservative","aggressive"]
 # lambda_values = [1.5, 1.75, 1.99, 2.25, 2.5]
