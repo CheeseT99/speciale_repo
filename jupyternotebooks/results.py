@@ -63,7 +63,7 @@ reference_return = 1.02**(1/12)-1  # Monthly
 #####################This is the True start and end date#################\\
 
 start_date = '1977-06-01'
-end_date = '1988-12-01'
+end_date = '2016-12-01'
 
 # Latest data: '2016-12-01'
 # Date range for the analysis
