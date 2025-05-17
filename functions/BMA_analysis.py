@@ -2,9 +2,15 @@ import os
 import pickle as pkl
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+
+
+# Directory containing cached BMA init files
+cache_dir = "./bma_cache2.0"
+plot_dir = "./bma_analysis_plots"
+os.makedirs(plot_dir, exist_ok=True)
 
 # Example: Load a specific estimation file
-cache_dir = './bma_cache2.0'
 month_str = '2006-06'  # Example date
 file_path = os.path.join(cache_dir, f"bma_init_{month_str}.pkl")
 
@@ -65,16 +71,45 @@ df.plot(title="Probability of Mispricing Over Time")
 
 print(df)
 
-import os
-import pickle as pkl
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-
-# Directory containing cached BMA init files
+# Re-run the loop to construct the mispricing time series and plot it
 cache_dir = "./bma_cache2.0"
-plot_dir = "./bma_analysis_plots"
-os.makedirs(plot_dir, exist_ok=True)
+results = []
+
+try:
+    for file in sorted(os.listdir(cache_dir)):
+        if file.startswith("bma_init_") and file.endswith(".pkl"):
+            date_str = file.replace("bma_init_", "").replace(".pkl", "")
+            with open(os.path.join(cache_dir, file), "rb") as f:
+                bma_dict = pkl.load(f)
+
+            CML = bma_dict["CMLCombined"]
+            CLMLU = bma_dict["CLMLU"]
+            prob_mispricing = np.sum(CML[:len(CLMLU)])
+
+            results.append((pd.to_datetime(date_str), prob_mispricing))
+
+    # Create DataFrame and plot
+    df = pd.DataFrame(results, columns=["Date", "ProbMispricing"]).set_index("Date")
+    df.sort_index(inplace=True)
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(df.index, df["ProbMispricing"], label="Unrestricted Models")
+    plt.plot(df.index, 1 - df["ProbMispricing"], label="Restricted Models", linestyle='--')
+    plt.title("Posterior Probability of Mispricing vs No Mispricing Over Time")
+    plt.xlabel("Date")
+    plt.ylabel("Posterior Probability")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, "posterior_mispricing_distribution.png"))
+    plt.close()
+
+except FileNotFoundError:
+    print("Folder './bma_cache2.0' not found. Please upload or specify the correct path.")
+
+
+
+
+
 
 # Prepare storage
 records = []
