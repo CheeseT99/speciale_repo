@@ -41,10 +41,9 @@ parent_dir = os.getcwd() # speciale_repo
 #############################################################
 
 #TESTING PARAMETERS
-strategies = ["conservative", "aggressive"]
-lambda_values = [1.99, 2.25]
-gamma_values = [0.12,0.25]
-
+strategies = ["conservative", "aggressive"]	
+lambda_values = [1.99, 2.5]
+gamma_values = [0.12,0.2]
 
 #############Test dates#################
 #start_date = '1977-06-01'
@@ -101,6 +100,7 @@ print(f"Elapsed time: {(tic-toc):.2f}")
 
 
 # Cache folder
+
 cache_dir = "./bma_cache"
 
 # Fetch historical returns
