@@ -52,6 +52,40 @@ def calculate_certainty_equivalent(
 
     return ce
 
+def add_certainty_equivalent_to_comparison_df(df: pd.DataFrame, reference: float = 0.0017) -> pd.DataFrame:
+    """
+    Adds a 'Certainty Equivalent' column to the DataFrame based on prospect theory inversion.
+
+    Args:
+        df (pd.DataFrame): Must contain 'Mean Return', 'Lambda', 'Gamma'
+        reference (float): Scalar reference return to use in CE calculation
+
+    Returns:
+        pd.DataFrame: Copy of input with added 'Certainty Equivalent' column
+    """
+
+    def rowwise_certainty_equivalent(row):
+        mu = row["Mean Return"]
+        lam = row["Lambda"]
+        gamma = row["Gamma"]
+        delta = mu - reference
+
+        if delta >= 0:
+            utility = (delta ** (1 - gamma)) / (1 - gamma) if gamma != 1 else np.log(1 + delta)
+        else:
+            utility = -lam * ((-delta) ** (1 - gamma)) / (1 - gamma) if gamma != 1 else -lam * np.log(1 - delta)
+
+        # Invert utility to get CE
+        if utility >= 0:
+            ce = ((1 - gamma) * utility) ** (1 / (1 - gamma)) if gamma != 1 else np.exp(utility) - 1
+        else:
+            ce = -(((1 - gamma) * (-utility)) / lam) ** (1 / (1 - gamma)) if gamma != 1 else -(np.exp(-utility / lam) - 1)
+
+        return ce
+
+    df = df.copy()
+    df["Certainty Equivalent"] = df.apply(rowwise_certainty_equivalent, axis=1)
+    return df
 
 
 def compute_certainty_equivalents(
