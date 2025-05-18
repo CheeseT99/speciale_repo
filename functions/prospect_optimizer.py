@@ -1720,6 +1720,7 @@ def summarize_backtest_results(results_input) -> pd.DataFrame:
             final_wealth = compounded.iloc[-1]
             min_wealth = compounded.min()
             max_drawdown = 1 - (min_wealth / compounded.cummax()).min()
+            HHI = df['Portfolio Weights'].apply(lambda x: np.sum(np.square(x))).mean()
 
             strategy, lam, gamma = parse_strategy_key(key)
 
@@ -1731,6 +1732,7 @@ def summarize_backtest_results(results_input) -> pd.DataFrame:
                 'Mean Return': mean_ret,
                 'Std Dev': std_ret,
                 'Sharpe Ratio': sharpe,
+                'HHI': HHI,
                 'Final Wealth': final_wealth,
                 'Max Drawdown': max_drawdown
             })
