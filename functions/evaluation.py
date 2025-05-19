@@ -82,11 +82,6 @@ def add_certainty_equivalent_to_comparison_df(df: pd.DataFrame, reference: float
             ce = -(((1 - gamma) * (-utility)) / lam) ** (1 / (1 - gamma)) if gamma != 1 else -(np.exp(-utility / lam) - 1)
 
         return ce
-    def _compute_hhi(weights):
-        w = np.array(weights, dtype=float)
-        return np.sum(w ** 2)
-
-    
     
     
 

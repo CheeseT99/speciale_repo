@@ -1713,6 +1713,9 @@ def summarize_backtest_results(results_input) -> pd.DataFrame:
         for key, df in results_input.items():
             returns = df['Portfolio Returns']
             compounded = df['Compounded Returns']
+            
+
+            #print(returns)
 
             mean_ret = returns.mean()
             std_ret = returns.std(ddof=1)
@@ -1723,6 +1726,14 @@ def summarize_backtest_results(results_input) -> pd.DataFrame:
             HHI = df['Portfolio Weights'].apply(lambda x: np.sum(np.square(x))).mean()
 
             strategy, lam, gamma = parse_strategy_key(key)
+            df['Prospect Value'] = returns.apply(
+                lambda r: ev.prospect_theory_value(r,
+                                                reference=0.0017,
+                                                lambda_=lam,
+                                                gamma=gamma)
+            )
+            mean_prospect_value = df['Prospect Value'].mean()
+            sum_of_prospect_values = df['Prospect Value'].sum()
 
             summary_rows.append({
                 'Strategy_Key': key,
@@ -1734,20 +1745,32 @@ def summarize_backtest_results(results_input) -> pd.DataFrame:
                 'Sharpe Ratio': sharpe,
                 'HHI': HHI,
                 'Final Wealth': final_wealth,
-                'Max Drawdown': max_drawdown
+                'Max Drawdown': max_drawdown,
+                "Prospect Value": mean_prospect_value,
+                "Sum of Prospect Values": sum_of_prospect_values
             })
     else:
         # Single DataFrame, e.g., for naive equal-weight
         df = results_input
         returns = df['Portfolio Returns']
         compounded = df['Compounded Returns']
+        
 
         mean_ret = returns.mean()
+        
         std_ret = returns.std(ddof=1)
         sharpe = mean_ret / std_ret if std_ret > 0 else np.nan
         final_wealth = compounded.iloc[-1]
         min_wealth = compounded.min()
         max_drawdown = 1 - (min_wealth / compounded.cummax()).min()
+        df['Prospect Value'] = returns.apply(
+                lambda r: ev.prospect_theory_value(r,
+                                                reference=0.0017,
+                                                lambda_=lam,
+                                                gamma=gamma)
+            )
+        mean_prospect_value = df['Prospect Value'].mean()
+        sum_of_prospect_values = df['Prospect Value'].sum()
 
         summary_rows.append({
             'Strategy_Key': "Naive Equal-Weight",
@@ -1758,7 +1781,9 @@ def summarize_backtest_results(results_input) -> pd.DataFrame:
             'Std Dev': std_ret,
             'Sharpe Ratio': sharpe,
             'Final Wealth': final_wealth,
-            'Max Drawdown': max_drawdown
+            'Max Drawdown': max_drawdown,
+            "Prospect Value": mean_prospect_value,
+            "Sum of Prospect Values": sum_of_prospect_values
         })
 
     summary_df = pd.DataFrame(summary_rows).set_index('Strategy_Key')
