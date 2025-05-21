@@ -4,52 +4,87 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-
 # Directory containing cached BMA init files
 cache_dir = "./bma_cache2.0"
 plot_dir = "./bma_analysis_plots"
 os.makedirs(plot_dir, exist_ok=True)
+# Prepare storage for each cutoff group
+cutoffs = [10, 100, 1000] 
+cutoff_masses = {n: [] for n in cutoffs}
+mispricing_probs = []
+n90_list = []  # ← NEW: track # of models for 90% posterior mass
+top1_probs = []
 
-# Example: Load a specific estimation file
-month_str = '2006-06'  # Example date
-file_path = os.path.join(cache_dir, f"bma_init_{month_str}.pkl")
+# Loop through all BMA files
+for file in sorted(os.listdir(cache_dir)):
+    if file.startswith("bma_init_") and file.endswith(".pkl"):
+        month_str = file.replace("bma_init_", "").replace(".pkl", "")
+        file_path = os.path.join(cache_dir, file)
 
-with open(file_path, "rb") as f:
-    bma_dict = pkl.load(f)
+        try:
+            with open(file_path, "rb") as f:
+                bma_dict = pkl.load(f)
+
+            # Extract posterior probabilities and log marginal likelihoods
+            CML = bma_dict["CMLCombined"]
+            CLMLU = bma_dict["CLMLU"]
+            CLMLR = bma_dict["CLMLR"]
+
+            df_models = pd.DataFrame({
+                "Model Index": np.arange(len(CML)),
+                "Log Marg Lik": np.concatenate([CLMLU, CLMLR]),
+                "Posterior Prob": CML,
+                "Model Type": ["Unrestricted"] * len(CLMLU) + ["Restricted"] * len(CLMLR)
+            })
+
+            # Sort and compute cumulative mass
+            top_models = df_models.sort_values("Posterior Prob", ascending=False).reset_index(drop=True)
+            top_models["Cumulative Mass"] = top_models["Posterior Prob"].cumsum()
+
+            # Track cumulative masses for specific cutoffs
+            for n in cutoffs:
+                if n <= len(top_models):
+                    mass = top_models.loc[n - 1, "Cumulative Mass"]
+                    cutoff_masses[n].append(mass)
+
+            # NEW: how many models to reach 90%?
+            n90 = (top_models["Cumulative Mass"] < 0.90).sum() + 1
+            n90_list.append(n90)
+
+            # Sort and compute cumulative mass
+            top_models = df_models.sort_values("Posterior Prob", ascending=False).reset_index(drop=True)
+            top_models["Cumulative Mass"] = top_models["Posterior Prob"].cumsum()
+
+            # Store posterior prob of the top 1 model
+            top1_probs.append(top_models.loc[0, "Posterior Prob"])
+
+            # Record mispricing probability
+            prob_mispricing = np.sum(CML[:len(CLMLU)])
+            mispricing_probs.append(prob_mispricing)
+
+        except Exception as e:
+            print(f"Skipping {file} due to error: {e}")
+
+# ========================
+# Print the average results
+# ========================
+print("\n=== Average Posterior Mass Across All Months ===")
+for n in cutoffs:
+    avg_mass = np.mean(cutoff_masses[n])
+    print(f"Top {n:>3} models account for {avg_mass:.2%} of posterior mass on average")
+
+avg_n90 = np.mean(n90_list)
+print(f"\nAverage number of models needed to reach 90% posterior mass: {avg_n90:.0f}")
+
+avg_top1 = np.mean(top1_probs)
+print(f"\nAverage posterior probability of the top 1 model: {avg_top1:.4%}")
 
 
-# Extract posterior probabilities and log marginal likelihoods
-CML = bma_dict["CMLCombined"]
-CLMLU = bma_dict["CLMLU"]
-CLMLR = bma_dict["CLMLR"]
+avg_mispricing = np.mean(mispricing_probs)
+avg_nomispricing = 1 - avg_mispricing
+print(f"\nAverage Probability of Mispricing:    {avg_mispricing:.4f}")
+print(f"Average Probability of No Mispricing: {avg_nomispricing:.4f}")
 
-# Generate a DataFrame of models
-df_models = pd.DataFrame({
-    "Model Index": np.arange(len(CML)),
-    "Log Marg Lik": np.concatenate([CLMLU, CLMLR]),
-    "Posterior Prob": CML,
-    "Model Type": ["Unrestricted"] * len(CLMLU) + ["Restricted"] * len(CLMLR)
-})
-
-# Sort by posterior probability
-top_models = df_models.sort_values("Posterior Prob", ascending=False).reset_index(drop=True)
-
-# Display top 10 models
-print(top_models.head(10))
-
-
-# Add cumulative sum
-top_models["Cumulative Mass"] = top_models["Posterior Prob"].cumsum()
-
-# How many models capture 90% of total probability?
-n_top = (top_models["Cumulative Mass"] < 0.90).sum() + 1
-print(f"Top {n_top} models account for 90% of posterior mass")
-
-
-prob_mispricing = np.sum(CML[:len(CLMLU)])
-prob_no_mispricing = np.sum(CML[len(CLMLU):])
-print(f"Probability of mispricing    = {prob_mispricing:.4f}")
-print(f"Probability of no mispricing = {prob_no_mispricing:.4f}")
 
 results = []
 
@@ -91,11 +126,9 @@ try:
     # Create DataFrame and plot
     df = pd.DataFrame(results, columns=["Date", "ProbMispricing"]).set_index("Date")
     df.sort_index(inplace=True)
-
     plt.figure(figsize=(12, 6))
     plt.plot(df.index, df["ProbMispricing"], label="Unrestricted Models")
     plt.plot(df.index, 1 - df["ProbMispricing"], label="Restricted Models", linestyle='--')
-    plt.title("Posterior Probability of Mispricing vs No Mispricing Over Time")
     plt.xlabel("Date")
     plt.ylabel("Posterior Probability")
     plt.legend()
@@ -168,12 +201,12 @@ df_post = pd.DataFrame(records).set_index("Date").sort_index()
 factor_df = pd.DataFrame(factor_inclusion_time).sort_index()
 predictor_df = pd.DataFrame(predictor_inclusion_time).sort_index()
 
+
 # Plot time series
-fig, axs = plt.subplots(4, 1, figsize=(12, 16), sharex=True)
+fig, axs = plt.subplots(3, 1, figsize=(12, 16), sharex=True)
 df_post['Entropy'].plot(ax=axs[0], title='Posterior Entropy Over Time')
 df_post['TopProb'].plot(ax=axs[1], title='Top Model Posterior Probability Over Time')
 df_post['TopN90Mass'].plot(ax=axs[2], title='Number of Models for 90% Posterior Mass')
-df_post['ProbMispricing'].plot(ax=axs[3], title='Posterior Probability of Mispricing (Unrestricted Models)')
 plt.tight_layout()
 plt.savefig(os.path.join(plot_dir, "posterior_summary_plots.png"))
 plt.close()
@@ -216,6 +249,20 @@ if not factor_df.empty:
     plt.legend(loc='upper right', fontsize=8, ncol=2)
     plt.tight_layout()
     plt.savefig(os.path.join(plot_dir, "factor_inclusion_timeseries.png"))
+    plt.close()
+
+# Plot PEAD inclusion probability over time
+if not factor_df.empty and 3 in factor_df.columns:
+    plt.figure(figsize=(14, 6))
+    plt.plot(factor_df.index, factor_df[3], label="PEAD", color="tab:blue")
+    plt.title("Inclusion Probability of PEAD Over Time")
+    plt.xlabel("Date")
+    plt.ylabel("Inclusion Probability")
+    plt.ylim(0, 1)
+    plt.grid(True, linestyle="--", alpha=0.6)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, "pead_inclusion_timeseries.png"))
     plt.close()
 
 # Plot predictor inclusion probabilities over time
@@ -311,14 +358,17 @@ plt.close()
 
 # Save updated versions of the summary stats
 factor_summary_named = pd.DataFrame({
-    'Mean': factor_df.mean(),
-    'StdDev': factor_df.std()
-}).sort_values("StdDev", ascending=False)
+    'Mean Probability': factor_df.mean(),
+    'Std. Dev.': factor_df.std()
+}).round(2).sort_values("Mean Probability", ascending=False)
 
 predictor_summary_named = pd.DataFrame({
-    'Mean': predictor_df.mean(),
-    'StdDev': predictor_df.std()
-}).sort_values("StdDev", ascending=False)
+    'Mean Probability': predictor_df.mean(),
+    'Std. Dev.': predictor_df.std()
+}).round(2).sort_values("Mean Probability", ascending=False)
+
+print(factor_summary_named)
+print(predictor_summary_named)
 
 factor_summary_named.to_csv(os.path.join(plot_dir, "factor_inclusion_summary_named.csv"))
 predictor_summary_named.to_csv(os.path.join(plot_dir, "predictor_inclusion_summary_named.csv"))

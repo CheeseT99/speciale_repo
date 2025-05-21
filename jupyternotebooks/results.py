@@ -43,7 +43,7 @@ parent_dir = os.getcwd() # speciale_repo
 #TESTING PARAMETERS
 strategies = ["conservative", "aggressive"]	
 lambda_values = [1.99, 2.5]
-gamma_values = [0.12,0.2]
+gamma_values = [0.12, 0.2]
 
 #############Test dates#################
 #start_date = '1977-06-01'
