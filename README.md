@@ -16,4 +16,3 @@ This repository contains all code, data references, cached results, and figures 
 
 ---
 
-## Repository map
