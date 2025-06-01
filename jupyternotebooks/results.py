@@ -253,6 +253,45 @@ results_by_method = {
     "Naive Equal-Weight": results_dict_naive
 }
 
+results_by_pt_method = {
+    "PT by BMA": results_dict_bma,
+    "PT by Historical Mean": results_dict_historical_mean,
+    "PT by FF Model": results_dict_factor_model,
+}
+
+
+# Define the exact desired columns
+desired_columns = [
+    'Portfolio Returns',
+    'Compounded Returns',
+    'Portfolio Weights',
+    'Expected Portfolio Returns',
+    'Reference Return'
+]
+
+all_2008_df_list = []
+
+for pt_method, df in results_by_pt_method.items():
+    for strat_key, inner_df in df.items():
+        inner_df_2008 = inner_df[inner_df.index.year == 2008].copy()
+
+        # Keep only desired columns if they exist
+        existing_cols = [col for col in desired_columns if col in inner_df_2008.columns]
+        inner_df_2008 = inner_df_2008[existing_cols]
+
+        # Add metadata
+        inner_df_2008['PT Method'] = pt_method
+        inner_df_2008['Strategy Key'] = strat_key
+
+        all_2008_df_list.append(inner_df_2008)
+
+
+
+# Combine all rows
+all_2008_df = pd.concat(all_2008_df_list)
+final_column_order = desired_columns + ['PT Method', 'Strategy Key']
+all_2008_df = all_2008_df[final_column_order]
+
 
 comparison_df = po.compare_methods(results_by_method)
 print(comparison_df.head())
