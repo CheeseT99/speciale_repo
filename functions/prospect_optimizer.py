@@ -1,11 +1,234 @@
 import numpy as np
 import plotly.graph_objects as go
-from scipy.optimize import minimize
+from scipy.optimize import Bounds, LinearConstraint, minimize
 import pandas as pd
 import statsmodels.api as sm
 from scipy.stats import mannwhitneyu, levene, f_oneway
+from conditionalAssetPricingLogMarginalLikelihoodTauClass import Model, printFactorsAndPredictorsProbabilities
+import pickle as pkl
+import os
+from collections import OrderedDict
+from sklearn.linear_model import LinearRegression
+import evaluation as ev
 
-def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservative"):
+import time
+
+def load_historical_returns(parent_dir: str, start_date=None, end_date=None) -> pd.DataFrame:
+    """
+    Loads historical factor returns to be used as investable returns
+    for historical mean backtesting.
+
+    Args:
+        parent_dir: Path to folder containing 'factors-20.csv'
+        start_date: Optional (YYYY-MM-DD) string
+        end_date: Optional (YYYY-MM-DD) string
+
+    Returns:
+        pd.DataFrame: [Date x Factors] monthly returns (as decimals)
+    """
+
+    factors_path = os.path.join(parent_dir, "Functions", "Data", "factors-20.csv")
+    factors = pd.read_csv(factors_path)
+
+    # Parse date
+    factors['Date'] = pd.to_datetime(factors['Date'].astype(str), format='%Y%m')
+    factors.set_index('Date', inplace=True)
+    factors.sort_index(inplace=True)
+
+    # Drop non-investable columns
+    drop_cols = ['MKTRF', 'SMB*', 'CON', 'IA', 'ROE', 'ME','HML','RMW','BAB','MMOM', 'FIN','MKT']
+    factors = factors.drop(columns=[col for col in drop_cols if col in factors.columns], errors='ignore')
+
+    # Optional slicing
+    if start_date:
+        factors = factors.loc[start_date:]
+    if end_date:
+        factors = factors.loc[:end_date]
+
+    return factors
+
+def load_risk_free_rate_from_factors(
+    parent_dir: str,
+    start_date: str = None,
+    end_date: str = None
+) -> pd.Series:
+    """
+    Computes and returns the risk-free rate as a time series from 'factors-20.csv',
+    using the identity: R_f = MKT - (Mkt-RF)
+
+    Args:
+        parent_dir (str): Path to the folder containing 'factors-20.csv'
+        start_date (str): Optional start date (YYYY-MM-DD)
+        end_date (str): Optional end date (YYYY-MM-DD)
+
+    Returns:
+        pd.Series: Risk-free rate time series indexed by date
+    """
+    file_path = os.path.join(parent_dir, "functions", "Data", "factors-20.csv")
+
+    # Load and parse
+    df = pd.read_csv(file_path)
+    df['Date'] = pd.to_datetime(df['Date'].astype(str), format='%Y%m')
+    df.set_index('Date', inplace=True)
+    df.sort_index(inplace=True)
+
+    if 'MKT' not in df.columns or 'Mkt-RF' not in df.columns:
+        raise ValueError("Missing required columns: 'MKT' and/or 'Mkt-RF' in factors-20.csv.")
+
+    # Compute risk-free rate
+    risk_free_rate = df['MKT'] - df['Mkt-RF']
+
+    # Apply optional slicing
+    if start_date:
+        risk_free_rate = risk_free_rate.loc[start_date:]
+    if end_date:
+        risk_free_rate = risk_free_rate.loc[:end_date]
+
+    return risk_free_rate
+
+
+def slice_reference(reference_series: pd.Series, start_date: str | pd.Timestamp, end_date: str | pd.Timestamp) -> pd.Series:
+    """
+    Slices the reference series from (start_date + 10 years) to end_date.
+
+    Returns:
+        pd.Series: Time-sliced reference return series.
+    """
+    start = pd.to_datetime(start_date) + pd.DateOffset(years=10)
+    end = pd.to_datetime(end_date)
+    return reference_series.loc[start:end]
+
+
+def load_reference_returns(parent_dir: str, ref_type: str = "market", start_date=None, end_date=None) -> dict:
+    """
+    Loads reference returns for use in PT evaluations.
+
+    Args:
+        parent_dir (str): Path to root data folder
+        ref_type (str): 'market' (Mkt-RF) or 'spy' (MKT)
+        start_date (str): Optional start filter (YYYY-MM-DD)
+        end_date (str): Optional end filter (YYYY-MM-DD)
+
+    Returns:
+        dict[pd.Timestamp, float]: reference returns (monthly)
+    """
+
+    factors_path = os.path.join(parent_dir, "functions", "Data", "factors-20.csv")
+    factors = pd.read_csv(factors_path)
+
+    factors['Date'] = pd.to_datetime(factors['Date'].astype(str), format='%Y%m')
+    factors.set_index('Date', inplace=True)
+    factors.sort_index(inplace=True)
+
+    # Map available references
+    col_map = {
+        "market": "Mkt-RF",
+        "spy": "MKT"
+    }
+
+    if ref_type not in col_map:
+        raise ValueError(f"ref_type must be one of {list(col_map.keys())}")
+
+    col = col_map[ref_type]
+
+    if col not in factors.columns:
+        raise KeyError(f"Column '{col}' not found in factors-20.csv")
+
+    returns = factors[col]
+
+    if start_date:
+        returns = returns.loc[start_date:]
+    if end_date:
+        returns = returns.loc[:end_date]
+
+    return returns.to_dict()
+
+
+
+def load_test_assets_and_factors(
+    parent_dir: str,
+    historical_returns: pd.DataFrame,
+    start_date=None,
+    end_date=None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Loads both test asset returns and regression factor returns
+    from 'factors-20.csv', using the asset names from historical_returns.
+
+    Args:
+        parent_dir: path to folder containing factors-20.csv
+        historical_returns: DataFrame whose columns define which test assets to load
+        start_date: optional start filter (YYYY-MM-DD)
+        end_date: optional end filter (YYYY-MM-DD)
+
+    Returns:
+        (test_assets_df, factor_returns_df): tuple of two DataFrames
+            - test_assets_df: returns of the assets in historical_returns.columns
+            - factor_returns_df: returns of Mkt-RF, IA, ROE
+    """
+    factors_path = os.path.join(
+        parent_dir,
+        "functions",
+        "Data",
+        "factors-20.csv"
+    )
+
+    factors = pd.read_csv(factors_path)
+
+    # Parse date
+    factors['Date'] = pd.to_datetime(factors['Date'].astype(str), format='%Y%m')
+    factors.set_index('Date', inplace=True)
+    factors.sort_index(inplace=True)
+
+    # Select only those columns available in the CSV
+    available_columns = set(factors.columns)
+    requested_assets = [col for col in historical_returns.columns if col in available_columns]
+
+    if not requested_assets:
+        raise ValueError("None of the columns in historical_returns are present in factors-20.csv.")
+
+    test_assets = factors[requested_assets]
+
+    # Select fixed factor columns according to largest posterior probs
+    factor_columns = ['Mkt-RF', 'PEAD', 'QMJ']
+    factor_returns = factors[factor_columns]
+
+    # Optional slicing
+    if start_date:
+        test_assets = test_assets.loc[start_date:]
+        factor_returns = factor_returns.loc[start_date:]
+    if end_date:
+        test_assets = test_assets.loc[:end_date]
+        factor_returns = factor_returns.loc[:end_date]
+
+    return test_assets, factor_returns
+
+
+
+
+def load_market_benchmark(parent_dir: str, start_date=None, end_date=None) -> pd.Series:
+    factors_path = os.path.join(parent_dir, "functions", "Data", "factors-20.csv")
+    
+    factors = pd.read_csv(factors_path)
+    factors['Date'] = pd.to_datetime(factors['Date'].astype(str), format='%Y%m')
+    factors.set_index('Date', inplace=True)
+    factors.sort_index(inplace=True)
+
+    # Extract Mkt-RF or other benchmark (assumed in percentage points, so divide by 100 if needed)
+    market_returns = factors['Mkt-RF'] 
+
+    # Optional slicing
+    if start_date:
+        market_returns = market_returns.loc[start_date:]
+    if end_date:
+        market_returns = market_returns.loc[:end_date]
+
+    # Compute cumulative returns
+    cumulative_market = (1 + market_returns).cumprod()
+    return cumulative_market
+
+# Bemærk: bruges ikke ved BMA
+def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservative", r_tminus1=0.0, r_tminus2=0.0):
     """
     Calculate the prospect value function with dynamic lambda for conservative or aggressive investors.
 
@@ -20,23 +243,19 @@ def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservati
     Returns:
     float: The prospect value.
     """
+    
     # Calculate portfolio returns based on weights
     portfolio_returns = np.dot(r_s, weights) #Used to calculate expected returns
-
-    # Get last and second last returns from portfolio performance
-    last_return = portfolio_returns[-1]
-    
-    second_last_return = portfolio_returns[-2]
-    
+    # er mean return for hver måned ved første kørsel af minimizer (lige vægte)
 
     # Calculate zt based on these returns
-    zt = calculate_zt(np.mean(portfolio_returns), last_return)
+    zt = calculate_zt(np.mean(portfolio_returns), r_hat)
 
     # Dynamically adjust lambda based on strategy and portfolio performance
     if strategy == "conservative":
-        lambda_dynamic = calculate_conservative_lambda(last_return, second_last_return, zt, lambda_)
+        lambda_dynamic = calculate_conservative_lambda(r_tminus1, r_hat, zt, lambda_)
     elif strategy == "aggressive":
-        lambda_dynamic = calculate_aggressive_lambda(last_return, second_last_return, zt, lambda_)
+        lambda_dynamic = calculate_aggressive_lambda(r_tminus1, r_hat, zt, lambda_)
     else:
         lambda_dynamic = lambda_
 
@@ -54,6 +273,7 @@ def prospect_value(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservati
         
 
     return -prospect_value_sum / S  # Negative sign for maximization
+
 
 def calculate_conservative_lambda(last_return, second_last_return, zt, lambda_=0.1):
     """
@@ -79,8 +299,306 @@ def calculate_zt(expected_return, last_return):
     """
     return (1 + last_return) / (1 + expected_return)
 
-def optimize_portfolio(r_s, r_hat, lambda_, strategy="conservative", gamma=0.1):
-    num_assets = len(r_s[0])
+
+def bma_initialization(ff, zz, tau, index_of_estimation, n_predictors_to_use=9):
+    """
+    Step 1: Initialize the conditional BMA model and compute marginal likelihoods.
+
+    Returns:
+        A dictionary containing model object, posterior probabilities, and diagnostics.
+    """
+
+
+    significantPredictors = np.arange(n_predictors_to_use)
+
+    model = Model(
+        rr=pd.DataFrame({'': []}),
+        ff=ff,
+        zz=zz,
+        significantPredictors=significantPredictors,
+        Tau=tau,
+        indexEndOfEstimation=index_of_estimation,
+        key_demean_predictors=True
+    )
+
+    (CLMLU, factorsNames, factorsProbabilityU, predictorsNames, predictorsProbabilityU,
+     T0IncreasedFraction, T0Max, T0Min, T0Avg, T0_div_T0_plus_TAvg, T_div_T0_plus_TAvg,
+     CLMLR, factorsProbabilityR, predictorsProbabilityR) = model.conditionalAssetPricingLogMarginalLikelihoodTauNumba()
+
+    CLMLCombined = np.concatenate((CLMLU, CLMLR))
+    CMLCombined = np.exp(CLMLCombined - np.max(CLMLCombined))
+    CMLCombined /= np.sum(CMLCombined)
+
+    factorsProbability = (
+        np.sum(CMLCombined[:len(CLMLU)]) * factorsProbabilityU +
+        np.sum(CMLCombined[len(CLMLU):]) * factorsProbabilityR
+    )
+    predictorsProbability = (
+        np.sum(CMLCombined[:len(CLMLU)]) * predictorsProbabilityU +
+        np.sum(CMLCombined[len(CLMLU):]) * predictorsProbabilityR
+    )
+
+    print(f"Probability of mispricing    = {np.sum(CMLCombined[:len(CLMLU)]):.4f}")
+    print(f"Probability of no mispricing = {np.sum(CMLCombined[len(CLMLU):]):.4f}")
+
+    return {
+        'model': model,
+        'CMLCombined': CMLCombined,
+        'CLMLU': CLMLU,
+        'CLMLR': CLMLR,
+        'factorsProbability': factorsProbability,
+        'predictorsProbability': predictorsProbability,
+        'T0IncreasedFraction': T0IncreasedFraction,
+        'T0Max': T0Max,
+        'T0Min': T0Min,
+        'T0Avg': T0Avg,
+        'T0divT0plusTAvg': T0_div_T0_plus_TAvg,
+        'TdivT0plusTAvg': T_div_T0_plus_TAvg
+    }
+
+def bma_predictions(bma_dict, number_of_sim=1000):
+    """
+    Step 2: From the initialized model and posterior, compute predictive means and covariances.
+
+    Returns:
+        Dictionary with 'returns_OOS' and 'covariance_matrix_OOS'.
+    """
+    model = bma_dict['model']
+    CMLCombined = bma_dict['CMLCombined']
+
+    nModelsInPrediction = int(len(CMLCombined) / 8)
+
+    (returns_OOS, _, _, 
+     covariance_matrix_OOS, _, 
+     _, _, _, _, _, _) = model.conditionalAssetPricingOOSTauNumba(CMLCombined, nModelsInPrediction)
+
+    return {
+        'returns_OOS': returns_OOS,
+        'covariance_matrix_OOS': covariance_matrix_OOS
+    }
+
+def calculate_bma_returns_old(prediction_dict, number_of_sim=10000):
+    """
+    Step 3: Simulate BMA returns from predicted means and covariances.
+
+    Returns:
+        Simulated return draws (np.ndarray of shape (number_of_sim, K))
+    """
+
+    means = prediction_dict['returns_OOS'][0]
+    cov = prediction_dict['covariance_matrix_OOS'][0]
+
+    simulated_returns = np.random.multivariate_normal(
+        means,
+        cov,
+        number_of_sim
+    )
+    # # Add noise to the simulated returns
+    # noise_std = 0.01  # Example: add 1% standard deviation noise
+    # noise = np.random.normal(0, noise_std, size=simulated_returns.shape)
+    # simulated_returns_noisy = simulated_returns + noise
+
+
+    # return simulated_returns_noisy
+    return simulated_returns
+
+
+# New way
+def calculate_bma_returns(prediction_dict, asset_columns, number_of_sim=10000, noise_std=0.01):
+    """
+    Step 3: Simulate BMA returns from predicted means and covariances.
+
+    Returns:
+        Simulated return draws (np.ndarray of shape (number_of_sim, K))
+    """
+
+    means = prediction_dict['returns_OOS'][0]
+    cov = prediction_dict['covariance_matrix_OOS'][0]
+
+    # Reconstruct expected returns
+    expected_returns = pd.Series(means, index=asset_columns)
+
+    simulated_returns = np.random.multivariate_normal(
+        means,
+        cov,
+        number_of_sim
+    )
+
+    # # Inject noise if you wish
+    # noise = np.random.normal(0, noise_std, size=simulated_returns.shape)
+    # simulated_returns_noisy = simulated_returns + noise
+
+    return simulated_returns, expected_returns, cov
+
+
+def run_bma_pipeline(ff_slice, zz_slice, tau, pickle_path_init, pickle_path_pred, number_of_sim=10000):
+    """
+    Runs the full BMA pipeline with caching for both:
+    - Step 1: BMA initialization (heavy)
+    - Step 2: Predictive mean/covariance (moderate)
+    - Step 3: Return simulation (lightweight)
+
+    Returns:
+        np.ndarray of simulated returns.
+    """
+
+    # === Step 1: Load or compute and save model initialization ===
+    if os.path.exists(pickle_path_init):
+        print(f"Loading cached BMA initialization from: {pickle_path_init}")
+        with open(pickle_path_init, "rb") as f:
+            bma_dict = pkl.load(f)
+    else:
+        print(f"Pickle not found. Initializing and saving to: {pickle_path_init}")
+        index_of_estimation = len(ff_slice) - 2
+        bma_dict = bma_initialization(ff_slice, zz_slice, tau, index_of_estimation)
+
+        with open(pickle_path_init, "wb") as f:
+            pkl.dump(bma_dict, f)
+
+    # === Step 2: Load or compute and save predictive mean/covariance ===
+    if os.path.exists(pickle_path_pred):
+        print(f"Loading cached BMA predictions from: {pickle_path_pred}")
+        with open(pickle_path_pred, "rb") as f:
+            pred_dict = pkl.load(f)
+    else:
+        print(f"Pickle not found. Computing BMA predictions and saving to: {pickle_path_pred}")
+        pred_dict = bma_predictions(bma_dict, number_of_sim=number_of_sim)
+
+        with open(pickle_path_pred, "wb") as f:
+            pkl.dump(pred_dict, f)
+
+    # === Step 3: Simulate returns ===
+    sim_draws, expected_returns, bma_covariance = calculate_bma_returns(pred_dict, asset_columns=ff_slice.columns[1:], number_of_sim=number_of_sim)
+
+    return sim_draws, expected_returns, bma_covariance
+
+
+def rolling_bma_returns(parent_dir, n_predictors_to_use, start_date, end_date, min_obs=120, tau=1.5, number_of_sim=10000) -> OrderedDict[pd.Timestamp, np.ndarray]:
+    """
+    Rolling BMA simulation:
+    - For each month, estimate model (or load from cache)
+    - Simulate predictive returns using run_bma_pipeline()
+    - Store 10,000 simulated draws in an OrderedDict indexed by date
+    """
+    # --- Load data ---
+    factors_path = os.path.join(parent_dir, "functions", "Data", "factors-20.csv")
+    predictors_path = os.path.join(parent_dir, "functions", "Data", "Z - 197706.csv")
+
+    factors = pd.read_csv(factors_path).drop(columns=['MKTRF', 'SMB*', 'CON', 'IA', 'ROE', 'ME','HML','RMW','BAB','MMOM', 'FIN','MKT'], errors='ignore')
+    #factors = pd.read_csv(factors_path).iloc[:, :10]
+    predictors = pd.read_csv(predictors_path).drop(columns=['Unnamed: 0','infl','b.m','tms','ltr'], errors='ignore')
+    print(factors.columns)
+    print(predictors.columns)
+
+    # --- Parse and align dates ---
+    factors['Date'] = pd.to_datetime(factors['Date'].astype(str), format='%Y%m')
+    predictors['Date'] = pd.to_datetime(predictors['Date'], format='%m/%d/%Y')
+
+    factors.set_index('Date', inplace=True)
+    predictors.set_index('Date', inplace=True)
+    factors.sort_index(inplace=True)
+    predictors.sort_index(inplace=True)
+
+    # --- Slice by user-defined date range ---
+    factors = factors.loc[start_date:end_date]
+    predictors = predictors.loc[start_date:end_date]
+
+    # --- Merge and align both datasets ---
+    merged = pd.concat([factors, predictors], axis=1, join='inner')
+    factor_cols = factors.columns
+    predictor_cols = predictors.columns
+
+    # --- Output container ---
+    bma_predictions = OrderedDict()
+    all_dates = merged.index[min_obs:]
+
+    # --- Ensure cache directory exists ---
+    cache_dir = os.path.join(parent_dir, "bma_cache2.0")
+    os.makedirs(cache_dir, exist_ok=True)
+
+    # --- Rolling loop ---
+    for current_date in all_dates:
+        print(f"Processing {current_date.strftime('%Y-%m')}")
+
+        f_slice = merged.loc[:current_date, factor_cols]
+        z_slice = merged.loc[:current_date, predictor_cols]
+
+
+        # Check if slice length exceeds the desired rolling window length and truncate
+        if len(f_slice) > min_obs:
+            f_slice = f_slice.iloc[-min_obs:]  # Keeps the last 'window_length' observations
+            z_slice = z_slice.iloc[-min_obs:]  # Keeps the last 'window_length' observations
+
+        f_reset = f_slice.reset_index().rename(columns={'index': 'Date'})
+        z_reset = z_slice.reset_index().rename(columns={'index': 'Date'})
+
+        date_label = current_date.strftime('%Y-%m')
+        pickle_path_init = os.path.join(cache_dir, f"bma_init_{date_label}.pkl")
+        pickle_path_pred = os.path.join(cache_dir, f"bma_pred_{date_label}.pkl")
+
+        sim_draws, expected_returns, bma_covariance = run_bma_pipeline(
+            ff_slice=f_reset,
+            zz_slice=z_reset,
+            tau=tau,
+            pickle_path_init=pickle_path_init,
+            pickle_path_pred=pickle_path_pred,
+            number_of_sim=number_of_sim
+        )
+
+        bma_predictions[current_date] = (sim_draws, expected_returns, bma_covariance)
+        #print(bma_covariance)
+
+    return bma_predictions
+
+
+def prospect_value_BMA(weights, r_s, r_hat, lambda_, gamma=0.1, strategy="conservative", r_tminus1=0.0, r_tminus2=0.0):
+    """
+    Calculate the prospect value function with dynamic lambda for conservative or aggressive investors.
+
+    Parameters:
+    weights (array): The weights for each asset in the portfolio.
+    r_s (array): The returns of each asset.
+    r_hat (float): The reference return.
+    lambda_ (float): The base loss aversion sensitivity coefficient.
+    gamma (float): The risk aversion coefficient (default is 0.1).
+    strategy (str): The risk strategy of the investor ('conservative' or 'aggressive').
+
+    Returns:
+    float: The prospect value.
+    """
+    # Calculate portfolio returns based on weights
+    portfolio_returns = np.dot(r_s, weights) #Used to calculate expected returns
+    # er mean return for hver måned ved første kørsel af minimizer (lige vægte)
+
+    # Calculate zt based on these returns
+    zt = calculate_zt(np.mean(portfolio_returns), r_hat)
+
+    # Dynamically adjust lambda based on strategy and portfolio performance
+    if strategy == "conservative":
+        lambda_dynamic = calculate_conservative_lambda(r_tminus1, r_hat, zt, lambda_)
+    elif strategy == "aggressive":
+        lambda_dynamic = calculate_aggressive_lambda(r_tminus1, r_hat, zt, lambda_)
+    else:
+        lambda_dynamic = lambda_
+
+    # Calculate prospect value
+    S = len(r_s)  # Number of periods
+    prospect_value_sum = 0
+
+    for s in range(S):
+        r_sx = np.dot(r_s[s], weights)  # Portfolio return for time period s
+        
+        gain_term = max(0, r_sx - r_hat)
+        loss_term = max(0, r_hat - r_sx)
+
+        prospect_value_sum += (gain_term ** (1 - gamma)) / (1 - gamma) - lambda_dynamic * (loss_term ** (1 - gamma)) / (1 - gamma)
+        
+
+    return -prospect_value_sum / S  # Negative sign for maximization
+
+
+def optimize_portfolio(r_s, r_hat, lambda_, strategy="conservative", gamma=0.1, r_tminus1=0.0, r_tminus2=0.0, BMA=False):
+    num_assets = len(r_s.T)  # Number of assets in the portfolio
 
     initial_weights = np.ones(num_assets) / num_assets
 
@@ -99,128 +617,213 @@ def optimize_portfolio(r_s, r_hat, lambda_, strategy="conservative", gamma=0.1):
         constraints.append({'type': 'ineq', 'fun': lambda x, i=i: x[i]})
         constraints.append({'type': 'ineq', 'fun': lambda x, i=i: 1 - x[i]})
 
-    # Now use COBYLA
-    result = minimize(prospect_value, initial_weights, 
-                      args=(r_s, r_hat, lambda_, gamma, strategy),
-                      method='COBYLA', constraints=constraints,
-                      options={'maxiter': 1000, 'tol': 1e-6})
+    if BMA == True:
+        # Use the BMA returns
+        result = minimize(prospect_value_BMA, initial_weights, 
+                          args=(r_s, r_hat, lambda_, gamma, strategy, r_tminus1, r_tminus2),
+                          method='COBYLA', constraints=constraints,
+                          options={'maxiter': 10000, 'tol': 1e-6})
+    else:
+        result = minimize(prospect_value, initial_weights, 
+                        args=(r_s, r_hat, lambda_, gamma, strategy, r_tminus1, r_tminus2),
+                        method='COBYLA', constraints=constraints,
+                        options={'maxiter': 1000, 'tol': 1e-6})
 
     return result
 
-
-# Adjusted backtest function to ensure each rebalancing period is restricted to one month only
-
-
-
-def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='1M', strategy="conservative", lambda_=1, gamma=0.9):
-
+def backtest_portfolio_bma(
+    bma_returns: OrderedDict,
+    true_returns: pd.Series,
+    strategy="conservative",
+    lambda_=1,
+    gamma=0.9,
+    pickle_path_backtest: str = None
+) -> pd.DataFrame:
     """
-    Perform backtesting on a portfolio with precise period restriction for specified strategy, lookback period, and rebalancing frequency.
+    Backtest portfolio using prospect theory on simulated BMA return draws.
+    Uses a fixed inflation-based reference return of ~0.165% per month.
+
+    Returns:
+        pd.DataFrame with ['Portfolio Returns', 'Compounded Returns', 'Portfolio Weights', 'r_hat']
     """
-    # Ensure that the index is in datetime format
-    returns.index = pd.to_datetime(returns.index)
-    returns = returns.loc[:'2023-12-31']
-    # Set up result containers
+    if pickle_path_backtest is not None and os.path.exists(pickle_path_backtest):
+        print(f"Loading cached backtest from: {pickle_path_backtest}")
+        with open(pickle_path_backtest, "rb") as f:
+            return pkl.load(f)
+
+    # Fixed reference return based on 2% annual inflation
+    reference_return = 1.02**(1/12) - 1  # ≈ 0.00165
+
+    dates = list(bma_returns.keys())
     portfolio_returns = []
     compounded_returns = []
     portfolio_weights = []
-    individual_asset_returns = {col: [] for col in returns.columns}  # Store each asset's return per period
-    r_hat_values = []  # Store r_hat values for each period
-    # Convert lookback_period and rebalancing_freq to Pandas offsets
-    lookback_offset = pd.DateOffset(months=int(lookback_period[:-1]) * (12 if lookback_period[-1] == 'Y' else 1))
-    rebalancing_offset = pd.DateOffset(months=int(rebalancing_freq[:-1]) * (12 if rebalancing_freq[-1] == 'Y' else 1))
-    # Initialize compound return
-    cumulative_return = 1
-    # Start backtesting over the range of dates
-    current_date = returns.index[0] + lookback_offset
-    end_date = returns.index[-1]
-    while current_date <= end_date:
+    r_hat_values = []
+    expected_portfolio_returns = []
 
-        # Define the lookback window
+    cumulative_return = 1.0
+    r_tminus1 = 0.0
+    r_tminus2 = 0.0
 
-        lookback_start = current_date - lookback_offset
+    for t, current_date in enumerate(dates[:-1]):
+        print(f"Backtesting {current_date.strftime('%Y-%m')}")
 
-        lookback_data = returns.loc[lookback_start:current_date]
-        # Find the last available SPY return before `current_date`
-        previous_date = returns.index[returns.index < current_date].max()
-        #print(returns)
-        r_hat = returns.loc[previous_date, 'SPY']#returns.loc[previous_date, '10Y_Bond_Return'] #np.mean(portfolio_returns)returns.loc[previous_date, 'SPY']
-        r_hat_values.append(r_hat)  # Store the current r_hat for the period
-        # Convert lookback data to NumPy array
+        r_s, expected_returns, bma_covariance = bma_returns[current_date]
 
-        r_s = np.array(lookback_data)
-        # Call the optimization function
-        result = optimize_portfolio(r_s, r_hat, lambda_, strategy, gamma)
-        weights = [round(weight, 4) for weight in result.x]
-        # Calculate the portfolio return for the exact next rebalancing period only
+        r_hat = reference_return  # ✅ Fixed inflation-based reference
+        r_hat_values.append(r_hat)
 
-        rebalancing_end_date = (current_date + rebalancing_offset) - pd.Timedelta(days=1)
-
-        next_period_data = returns.loc[current_date:rebalancing_end_date]
-
-
-
-        # Calculate portfolio return if there is data within the period
-
-        if not next_period_data.empty:
-
-            portfolio_return = np.dot(next_period_data.mean(), weights)  # weighted average of returns
-
-            portfolio_returns.append(portfolio_return)
-
-            cumulative_return *= (1 + portfolio_return)
-
-            compounded_returns.append(cumulative_return)
-
-        else:
-
-            portfolio_returns.append(0)
-
-            compounded_returns.append(cumulative_return)
-
-
-
-        # Save portfolio weights and each asset's actual mean return for the period
-
+        result = optimize_portfolio(
+            r_s=r_s,
+            r_hat=r_hat,
+            lambda_=lambda_,
+            strategy=strategy,
+            gamma=gamma,
+            r_tminus1=r_tminus1,
+            r_tminus2=r_tminus2,
+            BMA=True
+        )
+        weights = [round(w, 4) for w in result.x]
+        print(f"Optimized Weights: {weights}")
         portfolio_weights.append(weights)
 
-        for col in returns.columns:
+        next_date = dates[t + 1]
+        next_r_s, _, _ = bma_returns[next_date]
 
-            individual_asset_returns[col].append(next_period_data[col].mean() if not next_period_data.empty else 0)
+        asset_names = expected_returns.index
+        true_return = true_returns.loc[current_date][asset_names]
 
-        
+        portfolio_return = np.dot(true_return, weights)
+        portfolio_returns.append(portfolio_return)
 
-        # Move to next rebalancing period
+        cumulative_return *= (1 + portfolio_return)
+        compounded_returns.append(cumulative_return)
 
-        current_date += rebalancing_offset
+        expected_portfolio_return = np.dot(expected_returns.values, weights)
+        expected_portfolio_returns.append(expected_portfolio_return)
 
+        r_tminus2 = r_tminus1
+        r_tminus1 = portfolio_return
 
-
-    # Create a DataFrame with results
-
-    result_data = {
-
+    result_df = pd.DataFrame({
         'Portfolio Returns': portfolio_returns,
-
         'Compounded Returns': compounded_returns,
-
         'Portfolio Weights': portfolio_weights,
+        'Expected Portfolio Returns': expected_portfolio_returns,
+        'Reference Return': r_hat_values
+    }, index=dates[1:])
 
-        'r_hat': r_hat_values
+    if pickle_path_backtest is not None:
+        with open(pickle_path_backtest, "wb") as f:
+            pkl.dump(result_df, f)
 
-    }
-
-    result_data.update(individual_asset_returns)  # Add individual asset returns to result data
+    return result_df
 
 
-
-    # Align results DataFrame with the rebalancing dates
-
-    rebalancing_dates = returns.loc[returns.index[0] + lookback_offset:].resample(rebalancing_freq).first().index
-
-    result_df = pd.DataFrame(result_data, index=rebalancing_dates[:len(portfolio_returns)])
-
+#Taget fra min bachelor
+def maximize_sharp_ratio_no_spec(port_return: pd.DataFrame, 
+                         port_covariance: pd.DataFrame,
+                         x0,
+                         bounds: Bounds):
+    """ This function will take different inputs including portfolio return and covariance matrix, to maximize the sharp ratio of different portfolios with no extra constraints.
     
+    :param port_return: Portfolio return
+    :param port_covariance: Portfolio covariance matrix
+    :param x0: Initial guess for the minimizer
+    :param bounds: Bounds for the minimizer
+    :returns: Portfolio weight choice for maximizing sharp ratio with no extra constraints
+    """
+    function = lambda weight: np.sqrt(np.dot(weight,np.dot(weight,port_covariance)))/port_return.dot(weight)
+    bounds = bounds
+    constraints = (LinearConstraint(np.ones((port_covariance.shape[1],), dtype=int),1,1))
+                    #{'type': 'eq', 'fun': lambda weight: np.sqrt(np.dot(weight, np.dot(weight, port_covariance)))}) #Second restraint lets us define how high a return we want                                           
+    result = minimize(function, 
+                      x0,
+                      method='SLSQP', 
+                      bounds=bounds, 
+                      constraints=constraints)
+   
+    return result.x
+
+def backtest_portfolio_bma_maxsharpe(
+    bma_returns: OrderedDict,
+    true_returns: pd.Series,
+    strategy="conservative",
+    lambda_=1,
+    gamma=0.9,
+    pickle_path_backtest: str = None,
+    bounds=Bounds(0, 1)
+) -> pd.DataFrame:
+    """
+    Backtest portfolio using max Sharpe ratio on BMA estimates.
+    Uses a fixed inflation-based reference return for CE evaluation only.
+    """
+    if pickle_path_backtest is not None and os.path.exists(pickle_path_backtest):
+        print(f"Loading cached backtest from: {pickle_path_backtest}")
+        with open(pickle_path_backtest, "rb") as f:
+            return pkl.load(f)
+
+    # Fixed reference return from 2% annual inflation
+    reference_return = 1.02**(1/12) - 1
+
+    dates = list(bma_returns.keys())
+    portfolio_returns = []
+    compounded_returns = []
+    portfolio_weights = []
+    r_hat_values = []
+    expected_portfolio_returns = []
+
+    cumulative_return = 1.0
+    r_tminus1 = 0.0
+    r_tminus2 = 0.0
+
+    for t, current_date in enumerate(dates[:-1]):
+        print(f"Backtesting {current_date.strftime('%Y-%m')}")
+
+        r_s, expected_returns, bma_covariance = bma_returns[current_date]
+        w0 = np.linspace(start=1, stop=0, num=bma_covariance.shape[1])
+        x0 = w0 / np.sum(w0)
+
+        # === Step 1: Optimize max Sharpe ===
+        result = maximize_sharp_ratio_no_spec(
+            expected_returns, bma_covariance, x0, bounds
+        )
+        weights = [round(w, 4) for w in result]
+        portfolio_weights.append(weights)
+        print(f"Optimal weights: {weights}")
+
+        # === Step 2: Realized return
+        next_date = dates[t + 1]
+        next_r_s, _, _ = bma_returns[next_date]
+        asset_names = expected_returns.index
+        true_return = true_returns.loc[current_date][asset_names]
+
+        portfolio_return = np.dot(true_return, weights)
+        portfolio_returns.append(portfolio_return)
+
+        # === Step 3: Expected return + fixed reference
+        expected_portfolio_return = np.dot(expected_returns.values, weights)
+        expected_portfolio_returns.append(expected_portfolio_return)
+
+        r_hat_values.append(reference_return)  # ✅ fixed reference for CE
+
+        cumulative_return *= (1 + portfolio_return)
+
+        r_tminus2 = r_tminus1
+        r_tminus1 = portfolio_return
+        compounded_returns.append(cumulative_return)
+
+    result_df = pd.DataFrame({
+        'Portfolio Returns': portfolio_returns,
+        'Compounded Returns': compounded_returns,
+        'Portfolio Weights': portfolio_weights,
+        'Expected Portfolio Returns': expected_portfolio_returns,
+        'Reference Return': r_hat_values
+    }, index=dates[1:])
+
+    if pickle_path_backtest is not None:
+        with open(pickle_path_backtest, "wb") as f:
+            pkl.dump(result_df, f)
 
     return result_df
 
@@ -228,36 +831,1043 @@ def backtest_portfolio_adjusted(returns, lookback_period='5', rebalancing_freq='
 
 
 
-def resultgenerator(lambda_values, gamma_values, returns):
-    aggressive_result_list = []
-    conservative_result_list = []
-    for i, lambdas in enumerate(lambda_values):
-        for j, gammas in enumerate(gamma_values):
-            # Create a unique name using lambda and gamma values
-            result_name_aggressive = f"aggressive_result_lambda{lambdas}_gamma{gammas}"
-            result_name_conservative = f"conservative_result_lambda{lambdas}_gamma{gammas}"
-            
-            # Run the backtest with the specified lambda and gamma values
-            aggressive_results = backtest_portfolio_adjusted(
-                returns, lookback_period='2Y', 
-                rebalancing_freq='1M', 
-                strategy="aggressive", 
-                lambda_=lambdas, 
-                gamma=gammas
-            )
-            conservative_results = backtest_portfolio_adjusted(
-                returns, lookback_period='2Y', 
-                rebalancing_freq='1M', 
-                strategy="conservative", 
-                lambda_=lambdas, 
-                gamma=gammas
-            )
-            
-            # Append the results with a unique name
-            aggressive_result_list.append({result_name_aggressive: aggressive_results})
-            conservative_result_list.append({result_name_conservative: conservative_results})
+def resultgenerator_bma(lambda_values, gamma_values, bma_returns, true_returns, strategies, date_tag: str, cache_dir="backtest_caches/bma_cache"):
+    """
+    Runs backtests over a grid of (lambda, gamma, strategy) using BMA-simulated returns.
+    Each result is cached to a .pkl and returned in a dictionary.
+    """
+    results_dict = {}
+    os.makedirs(cache_dir, exist_ok=True)
+
+    for lambdas in lambda_values:
+        print(f"\nλ = {lambdas}")
+        for gammas in gamma_values:
+            print(f"  γ = {gammas}")
+            for strategy in strategies:
+                key = f"{strategy}_{lambdas}_{gammas}"
+                print(f"    Strategy: {key}")
+
+                pickle_path_bt = os.path.join(
+                    cache_dir,
+                    f"backtest_{strategy}_lambda{lambdas}_gamma{gammas}_{date_tag}.pkl"
+                )
+
+                toc = time.time()
+                results = backtest_portfolio_bma(
+                    bma_returns=bma_returns,
+                    true_returns=true_returns,
+                    strategy=strategy,
+                    lambda_=lambdas,
+                    gamma=gammas,
+                    pickle_path_backtest=pickle_path_bt
+                )
+                tic = time.time()
+                print(f"    → Completed in {(tic - toc):.2f}s")
+
+                results_dict[key] = results
+
+    return results_dict
+
+
+def resultgenerator_bma_maxsharpe(lambda_values, gamma_values, bma_returns, true_returns, strategies, date_tag: str, cache_dir="backtest_caches/bma_cache_maxsharpe"):
+    """
+    Runs backtests over a grid of (lambda, gamma, strategy) using BMA-simulated returns.
+    Each result is cached to a .pkl and returned in a dictionary.
+    """
+    results_dict = {}
+    os.makedirs(cache_dir, exist_ok=True)
+
+    for lambdas in lambda_values:
+        print(f"\nλ = {lambdas}")
+        for gammas in gamma_values:
+            print(f"  γ = {gammas}")
+            for strategy in strategies:
+                key = f"{strategy}_{lambdas}_{gammas}"
+                print(f"    Strategy: {key}")
+
+                pickle_path_bt = os.path.join(
+                    cache_dir,
+                    f"backtest_bmamaxsharpe_{strategy}_lambda{lambdas}_gamma{gammas}_{date_tag}.pkl"
+                )
+
+                toc = time.time()
+                results = backtest_portfolio_bma_maxsharpe(
+                    bma_returns=bma_returns,
+                    true_returns=true_returns,
+                    strategy=strategy,
+                    lambda_=lambdas,
+                    gamma=gammas,
+                    pickle_path_backtest=pickle_path_bt
+                )
+                tic = time.time()
+                print(f"    → Completed in {(tic - toc):.2f}s")
+
+                results_dict[key] = results
+
+    return results_dict
+
+
+def backtest_portfolio_historical_mean(
+    historical_returns: pd.DataFrame,
+    strategy="conservative",
+    lambda_=1,
+    gamma=0.9,
+    lookback_period: int = 120,  # 10 years of monthly returns
+    pickle_path_backtest: str = None
+) -> pd.DataFrame:
+    """
+    Backtest portfolio using historical mean return estimates.
+    Uses a rolling lookback window and a fixed inflation-based reference return.
+    """
+    if pickle_path_backtest is not None and os.path.exists(pickle_path_backtest):
+        print(f"Loading cached historical mean backtest from: {pickle_path_backtest}")
+        with open(pickle_path_backtest, "rb") as f:
+            return pkl.load(f)
+
+    dates = historical_returns.index
+    num_assets = historical_returns.shape[1]
+
+    portfolio_returns = []
+    compounded_returns = []
+    portfolio_weights = []
+    r_hat_values = []
+    expected_portfolio_returns = []
+
+    cumulative_return = 1.0
+    r_tminus1 = 0.0
+    r_tminus2 = 0.0
+
+    # Set fixed reference return based on inflation
+    reference_return = 1.02**(1/12) - 1
+
+    for t in range(lookback_period, len(dates) - 1):
+        current_date = dates[t]
+        print(f"Backtesting {current_date.strftime('%Y-%m')}")
+
+        # Lookback window
+        past_returns = historical_returns.iloc[t - lookback_period:t]
+
+        # Forecast = historical mean
+        expected_returns = past_returns.mean()
+
+        # Realized next period returns
+        next_returns = historical_returns.iloc[t + 1]
+
+        # Optimize
+        result = optimize_portfolio(
+            r_s=np.random.multivariate_normal(expected_returns.values, past_returns.cov(), size=10000),
+            r_hat=reference_return,
+            lambda_=lambda_,
+            strategy=strategy,
+            gamma=gamma,
+            r_tminus1=r_tminus1,
+            r_tminus2=r_tminus2,
+            BMA=False
+        )
+        weights = [round(w, 4) for w in result.x]
+        portfolio_weights.append(weights)
+
+        portfolio_return = np.dot(next_returns.values, weights)
+        portfolio_returns.append(portfolio_return)
+
+        expected_portfolio_return = np.dot(expected_returns.values, weights)
+        expected_portfolio_returns.append(expected_portfolio_return)
+
+        cumulative_return *= (1 + portfolio_return)
+        compounded_returns.append(cumulative_return)
+
+        r_hat_values.append(reference_return)
+        r_tminus2 = r_tminus1
+        r_tminus1 = portfolio_return
+
+    result_df = pd.DataFrame({
+        'Portfolio Returns': portfolio_returns,
+        'Compounded Returns': compounded_returns,
+        'Portfolio Weights': portfolio_weights,
+        'Expected Portfolio Returns': expected_portfolio_returns,
+        'Reference Return': r_hat_values
+    }, index=dates[lookback_period + 1:])
+
+    if pickle_path_backtest is not None:
+        with open(pickle_path_backtest, "wb") as f:
+            pkl.dump(result_df, f)
+
+    return result_df
+
+
+
+
+
+def resultgenerator_historical_mean(lambda_values, gamma_values, historical_returns, strategies, date_tag: str, cache_dir="backtest_caches/historical_mean_cache"):
+    """
+    Runs backtests over a grid of (lambda, gamma, strategy) using Historical Sample Mean returns.
+    """
+    results_dict = {}
+    os.makedirs(cache_dir, exist_ok=True)
+
+    for lambdas in lambda_values:
+        print(f"\nλ = {lambdas}")
+        for gammas in gamma_values:
+            print(f"  γ = {gammas}")
+            for strategy in strategies:
+                key = f"{strategy}_{lambdas}_{gammas}"
+                print(f"    Strategy: {key}")
+
+                pickle_path_bt = os.path.join(
+                    cache_dir,
+                    f"backtest_historical_mean_{strategy}_lambda{lambdas}_gamma{gammas}_{date_tag}.pkl"
+                )
+
+                toc = time.time()
+                results = backtest_portfolio_historical_mean(
+                    historical_returns=historical_returns,
+                    strategy=strategy,
+                    lambda_=lambdas,
+                    gamma=gammas,
+                    pickle_path_backtest=pickle_path_bt
+                )
+                tic = time.time()
+                print(f"    → Completed in {(tic - toc):.2f}s")
+
+                results_dict[key] = results
+
+    return results_dict
+
+def backtest_portfolio_mvp(
+    historical_returns: pd.DataFrame,
+    strategy="conservative",  # not used in MVP, included for API consistency
+    lambda_=1,                # not used in MVP
+    gamma=0.9,                # not used in MVP
+    lookback_period: int = 120,
+    pickle_path_backtest: str = None
+) -> pd.DataFrame:
+    """
+    Backtest Minimum Variance Portfolio (MVP) without expected returns.
+    Uses a fixed inflation-based reference return for CE evaluation purposes only.
+    """
+    if pickle_path_backtest is not None and os.path.exists(pickle_path_backtest):
+        print(f"Loading cached MVP backtest from: {pickle_path_backtest}")
+        with open(pickle_path_backtest, "rb") as f:
+            return pkl.load(f)
+
+    # Fixed reference return based on 2% annual inflation
+    reference_return = 1.02**(1/12) - 1
+
+    dates = historical_returns.index
+    num_assets = historical_returns.shape[1]
+
+    portfolio_returns = []
+    compounded_returns = []
+    portfolio_weights = []
+    reference_series = []
+
+    cumulative_return = 1.0
+    r_tminus1 = 0.0
+    r_tminus2 = 0.0
+
+    for t in range(lookback_period, len(dates) - 1):
+        current_date = dates[t]
+        print(f"Backtesting {current_date.strftime('%Y-%m')}")
+
+        # === Lookback returns ===
+        past_returns = historical_returns.iloc[t - lookback_period:t]
+        cov_matrix = past_returns.cov()
+
+        # === MVP Optimization ===
+        def portfolio_variance(weights):
+            return weights.T @ cov_matrix.values @ weights
+
+        constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]
+        bounds = [(0, 1) for _ in range(num_assets)]
+        initial_weights = np.ones(num_assets) / num_assets
+
+        result = minimize(portfolio_variance, initial_weights, bounds=bounds, constraints=constraints)
+        weights = [round(w, 4) for w in result.x]
+        portfolio_weights.append(weights)
+
+        # === Realized next-period return ===
+        next_returns = historical_returns.iloc[t + 1]
+        portfolio_return = np.dot(next_returns.values, weights)
+        portfolio_returns.append(portfolio_return)
+
+        # === Append fixed reference return ===
+        reference_series.append(reference_return)
+
+        cumulative_return *= (1 + portfolio_return)
+        compounded_returns.append(cumulative_return)
+
+        r_tminus2 = r_tminus1
+        r_tminus1 = portfolio_return
+
+    result_df = pd.DataFrame({
+        'Portfolio Returns': portfolio_returns,
+        'Compounded Returns': compounded_returns,
+        'Portfolio Weights': portfolio_weights,
+        'Reference Return': reference_series
+    }, index=dates[lookback_period + 1:])
+
+    if pickle_path_backtest is not None:
+        with open(pickle_path_backtest, "wb") as f:
+            pkl.dump(result_df, f)
+
+    return result_df
+
+
+
+
+
+
+
+
+def resultgenerator_mvp(lambda_values, gamma_values, historical_returns, strategies, date_tag: str, cache_dir="backtest_caches/mvp_cache"):
+    """
+    Runs MVP backtests over (lambda, gamma, strategy) grid.
+    """
+    results_dict = {}
+    os.makedirs(cache_dir, exist_ok=True)
+
+    for lambdas in lambda_values:
+        print(f"\nλ = {lambdas}")
+        for gammas in gamma_values:
+            print(f"  γ = {gammas}")
+            for strategy in strategies:
+                key = f"{strategy}_{lambdas}_{gammas}"
+                print(f"    Strategy: {key}")
+
+                pickle_path_bt = os.path.join(
+                    cache_dir,
+                    f"backtest_mvp_{strategy}_lambda{lambdas}_gamma{gammas}_{date_tag}.pkl"
+                )
+
+                toc = time.time()
+                results = backtest_portfolio_mvp(
+                    historical_returns=historical_returns,
+                    strategy=strategy,
+                    lambda_=lambdas,
+                    gamma=gammas,
+                    pickle_path_backtest=pickle_path_bt
+                )
+                tic = time.time()
+                print(f"    → Completed in {(tic - toc):.2f}s")
+
+                results_dict[key] = results
+
+    return results_dict
+
+
+### Mean variance optimization without BMA
+
+
+def backtest_portfolio_max_sharpe(
+    historical_returns: pd.DataFrame,
+    strategy="conservative",  # for consistency only
+    lambda_=1,
+    gamma=0.9,
+    lookback_period: int = 120,
+    pickle_path_backtest: str = None
+) -> pd.DataFrame:
+    """
+    Backtest max Sharpe portfolio using historical means and covariances.
+    Uses a fixed inflation-based reference return for CE evaluation only.
+    """
+    if pickle_path_backtest is not None and os.path.exists(pickle_path_backtest):
+        print(f"Loading cached max Sharpe backtest from: {pickle_path_backtest}")
+        with open(pickle_path_backtest, "rb") as f:
+            return pkl.load(f)
+
+    reference_return = 1.02**(1/12) - 1  # ≈ 0.00165 monthly
+
+    dates = historical_returns.index
+    num_assets = historical_returns.shape[1]
+
+    portfolio_returns = []
+    compounded_returns = []
+    portfolio_weights = []
+    expected_portfolio_returns = []
+    reference_series = []
+
+    cumulative_return = 1.0
+    r_tminus1 = 0.0
+    r_tminus2 = 0.0
+
+    for t in range(lookback_period, len(dates) - 1):
+        current_date = dates[t]
+        print(f"Backtesting {current_date.strftime('%Y-%m')}")
+
+        past_returns = historical_returns.iloc[t - lookback_period:t]
+        expected_returns = past_returns.mean()
+        cov_matrix = past_returns.cov()
+
+        # === Max Sharpe Optimization ===
+        def negative_sharpe(weights):
+            port_ret = np.dot(weights, expected_returns.values)
+            port_std = np.sqrt(weights.T @ cov_matrix.values @ weights)
+            return -port_ret / port_std
+
+        constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]
+        bounds = [(0, 1) for _ in range(num_assets)]
+        initial_weights = np.ones(num_assets) / num_assets
+
+        result = minimize(negative_sharpe, initial_weights, bounds=bounds, constraints=constraints)
+        weights = [round(w, 4) for w in result.x]
+        portfolio_weights.append(weights)
+
+        next_returns = historical_returns.iloc[t + 1]
+        portfolio_return = np.dot(next_returns.values, weights)
+        portfolio_returns.append(portfolio_return)
+
+        expected_portfolio_return = np.dot(expected_returns.values, weights)
+        expected_portfolio_returns.append(expected_portfolio_return)
+
+        reference_series.append(reference_return)
+        cumulative_return *= (1 + portfolio_return)
+        compounded_returns.append(cumulative_return)
+
+        r_tminus2 = r_tminus1
+        r_tminus1 = portfolio_return
+
+    result_df = pd.DataFrame({
+        'Portfolio Returns': portfolio_returns,
+        'Compounded Returns': compounded_returns,
+        'Portfolio Weights': portfolio_weights,
+        'Expected Portfolio Returns': expected_portfolio_returns,
+        'Reference Return': reference_series
+    }, index=dates[lookback_period + 1:])
+
+    if pickle_path_backtest is not None:
+        with open(pickle_path_backtest, "wb") as f:
+            pkl.dump(result_df, f)
+
+    return result_df
+
+
+
+
+
+
+
+def resultgenerator_max_sharpe(lambda_values, gamma_values, historical_returns, strategies, date_tag: str, cache_dir="backtest_caches/max_sharpe_cache"):
+    """
+    Runs MVP backtests over (lambda, gamma, strategy) grid.
+    """
+    results_dict = {}
+    os.makedirs(cache_dir, exist_ok=True)
+
+    for lambdas in lambda_values:
+        print(f"\nλ = {lambdas}")
+        for gammas in gamma_values:
+            print(f"  γ = {gammas}")
+            for strategy in strategies:
+                key = f"{strategy}_{lambdas}_{gammas}"
+                print(f"    Strategy: {key}")
+
+                pickle_path_bt = os.path.join(
+                    cache_dir,
+                    f"backtest_maxsharpe_{strategy}_lambda{lambdas}_gamma{gammas}_{date_tag}.pkl"
+                )
+
+                toc = time.time()
+                results = backtest_portfolio_max_sharpe(
+                    historical_returns=historical_returns,
+                    strategy=strategy,
+                    lambda_=lambdas,
+                    gamma=gammas,
+                    pickle_path_backtest=pickle_path_bt
+                )
+                tic = time.time()
+                print(f"    → Completed in {(tic - toc):.2f}s")
+
+                results_dict[key] = results
+
+    return results_dict
+
+
+
+### Fama-French 5-Factor Model
+
+def estimate_factor_model_expected_returns(
+    asset_returns: pd.DataFrame,
+    factor_returns: pd.DataFrame,
+    lookback_window: int = 120
+) -> pd.Series:
+    """
+    Estimates expected returns for assets using a linear factor model.
+
+    Args:
+        asset_returns: DataFrame of asset returns (e.g., SMB, HML, RMW)
+        factor_returns: DataFrame of factor returns (e.g., Mkt-RF, IA, ROE)
+        lookback_window: number of months to look back for estimation
+
+    Returns:
+        pd.Series: Expected returns per asset
+    """
+
+    # Restrict to lookback window
+    asset_returns = asset_returns.iloc[-lookback_window:]
+    factor_returns = factor_returns.iloc[-lookback_window:]
+
+    expected_returns = {}
+
+    for asset in asset_returns.columns:
+        y = asset_returns[asset].values
+        X = factor_returns.values
+
+        # Fit OLS regression
+        model = LinearRegression().fit(X, y)
+        betas = model.coef_
+
+        # Estimate expected factor returns
+        expected_factor_premia = factor_returns.mean().values
+
+        # Implied expected return for the asset
+        implied_return = np.dot(betas, expected_factor_premia)
+        expected_returns[asset] = implied_return
+
+    return pd.Series(expected_returns)
+
+
+def backtest_portfolio_factor_model(
+    test_assets_returns: pd.DataFrame,
+    factor_returns: pd.DataFrame,
+    strategy="conservative",
+    lambda_=1,
+    gamma=0.9,
+    lookback_period: int = 120,
+    pickle_path_backtest: str = None
+) -> pd.DataFrame:
+    """
+    Backtest using expected returns derived from a factor model (modified Fama-French structure).
+    Uses a fixed inflation-based reference return for CE evaluation and PT optimization.
+    """
+    if pickle_path_backtest is not None and os.path.exists(pickle_path_backtest):
+        print(f"Loading cached factor model backtest from: {pickle_path_backtest}")
+        with open(pickle_path_backtest, "rb") as f:
+            return pkl.load(f)
+
+    # Fixed reference return based on 2% annual inflation
+    reference_return = 1.02**(1/12) - 1
+
+    dates = test_assets_returns.index
+    num_assets = test_assets_returns.shape[1]
+
+    portfolio_returns = []
+    compounded_returns = []
+    portfolio_weights = []
+    expected_portfolio_returns = []
+    reference_series = []
+
+    cumulative_return = 1.0
+    r_tminus1 = 0.0
+    r_tminus2 = 0.0
+
+    for t in range(lookback_period, len(dates) - 1):
+        current_date = dates[t]
+        print(f"Backtesting {current_date.strftime('%Y-%m')}")
+
+        # === Step 0: Lookback window ===
+        past_asset_returns = test_assets_returns.iloc[t - lookback_period:t]
+        past_factor_returns = factor_returns.iloc[t - lookback_period:t]
+
+        # === Step 1: Estimate betas and expected returns ===
+        expected_returns = {}
+
+        for asset in past_asset_returns.columns:
+            y = past_asset_returns[asset].values
+            X = past_factor_returns.values
+
+            model = LinearRegression().fit(X, y)
+            betas = model.coef_
+            expected_factor_premia = past_factor_returns.mean().values
+            implied_return = np.dot(betas, expected_factor_premia)
+            expected_returns[asset] = implied_return
+
+        expected_returns = pd.Series(expected_returns)
+
+        # === Step 2: Simulate return draws ===
+        cov_matrix = past_asset_returns.cov()
+        simulated_returns = np.random.multivariate_normal(
+            expected_returns.values, cov_matrix.values, size=10000
+        )
+
+        # === Step 3: Optimize using PT objective ===
+        result = optimize_portfolio(
+            r_s=simulated_returns,
+            r_hat=reference_return,
+            lambda_=lambda_,
+            strategy=strategy,
+            gamma=gamma,
+            r_tminus1=r_tminus1,
+            r_tminus2=r_tminus2,
+            BMA=False
+        )
+        weights = [round(w, 4) for w in result.x]
+        portfolio_weights.append(weights)
+
+        # === Step 4: Realized next-period return
+        next_returns = test_assets_returns.iloc[t + 1]
+        portfolio_return = np.dot(next_returns.values, weights)
+        portfolio_returns.append(portfolio_return)
+
+        expected_portfolio_return = np.dot(expected_returns.values, weights)
+        expected_portfolio_returns.append(expected_portfolio_return)
+
+        cumulative_return *= (1 + portfolio_return)
+        compounded_returns.append(cumulative_return)
+        reference_series.append(reference_return)
+
+        r_tminus2 = r_tminus1
+        r_tminus1 = portfolio_return
+
+    result_df = pd.DataFrame({
+        'Portfolio Returns': portfolio_returns,
+        'Compounded Returns': compounded_returns,
+        'Portfolio Weights': portfolio_weights,
+        'Expected Portfolio Returns': expected_portfolio_returns,
+        'Reference Return': reference_series
+    }, index=dates[lookback_period + 1:])
+
+    if pickle_path_backtest is not None:
+        with open(pickle_path_backtest, "wb") as f:
+            pkl.dump(result_df, f)
+
+    return result_df
+
+
+
+
+def resultgenerator_factor_model(
+    lambda_values,
+    gamma_values,
+    test_assets_returns,
+    factor_returns,
+    reference_series,
+    strategies,
+    date_tag: str,
+    cache_dir="backtest_caches/factor_model_cache"
+) -> dict[str, pd.DataFrame]:
+    """
+    Runs factor model-based backtests over (lambda, gamma, strategy) grid.
+    """
+
+    results_dict = {}
+    os.makedirs(cache_dir, exist_ok=True)
+
+    for lambdas in lambda_values:
+        print(f"\nλ = {lambdas}")
+        for gammas in gamma_values:
+            print(f"  γ = {gammas}")
+            for strategy in strategies:
+                key = f"{strategy}_{lambdas}_{gammas}"
+                print(f"    Strategy: {key}")
+
+                pickle_path_bt = os.path.join(
+                    cache_dir,
+                    f"backtest_factor_model_{strategy}_lambda{lambdas}_gamma{gammas}_{date_tag}.pkl"
+                )
+
+                toc = time.time()
+                results = backtest_portfolio_factor_model(
+                    test_assets_returns=test_assets_returns,
+                    factor_returns=factor_returns,
+                    strategy=strategy,
+                    lambda_=lambdas,
+                    gamma=gammas,
+                    pickle_path_backtest=pickle_path_bt
+                )
+                tic = time.time()
+                print(f"    → Completed in {(tic - toc):.2f}s")
+
+                results_dict[key] = results
+
+    return results_dict
+
+
+def naive_equal_weight_portfolio(
+    returns: pd.DataFrame,
+    start_date: str,
+    end_date: str
+) -> pd.DataFrame:
+    """
+    Computes the naive equal-weighted (1/N) portfolio returns over time,
+    starting from (start_date + 10 years) to match BMA evaluation window.
+    Uses a fixed inflation-based reference return for CE evaluation.
+
+    Args:
+        returns: DataFrame of asset returns (rows = time, columns = assets)
+        start_date: date from which to offset 10 years (e.g. '1997-01-01')
+        end_date: final evaluation date (e.g. '2023-12-31')
+
+    Returns:
+        DataFrame with:
+        - 'Portfolio Returns': equal-weighted return at each time
+        - 'Compounded Returns': cumulative return path
+        - 'Portfolio Weights': constant equal weights
+        - 'Reference Return': fixed inflation benchmark
+    """
+    start_dt = pd.to_datetime(start_date) + pd.DateOffset(years=10)
+    end_dt = pd.to_datetime(end_date)
+
+    sliced_returns = returns.loc[start_dt:end_dt]
+    n_assets = sliced_returns.shape[1]
+    equal_weights = np.ones(n_assets) / n_assets
+
+    portfolio_returns = sliced_returns @ equal_weights
+    compounded_returns = (1 + portfolio_returns).cumprod()
+
+    reference_return = 1.02**(1/12) - 1
+    reference_series = [reference_return] * len(portfolio_returns)
+
+    return pd.DataFrame({
+        'Portfolio Returns': portfolio_returns,
+        'Compounded Returns': compounded_returns,
+        'Portfolio Weights': [equal_weights] * len(portfolio_returns),
+        'Reference Return': reference_series
+    }, index=sliced_returns.index)
+
+
+
+
+
+def backtest_portfolio_dynamic_rhat(
+    bma_returns: OrderedDict,
+    strategy="conservative",
+    lambda_=1,
+    gamma=0.9,
+    reference_rule: str = "prev_portfolio",  # NEW: dynamic reference point
+    market_returns: dict = None,             # optional, if using market as reference
+    cache_dir: str = "./bma_cache"
+) -> pd.DataFrame:
+    """
+    Backtest portfolio using prospect theory on simulated BMA return draws,
+    allowing for different reference point definitions and automatic caching.
+
+    Args:
+        bma_returns: OrderedDict[date, np.ndarray] of simulated returns
+        strategy: 'conservative' or 'aggressive'
+        lambda_: loss aversion
+        gamma: risk aversion
+        reference_rule: 'prev_portfolio', 'fixed_zero', 'market_return', 'rolling_avg'
+        market_returns: optional dict[pd.Timestamp, float]
+        cache_dir: folder to store cached backtest pickle
+
+    Returns:
+        pd.DataFrame with ['Portfolio Returns', 'Compounded Returns', 'Portfolio Weights', 'r_hat']
+    """
+
+    # === Create cache path ===
+    os.makedirs(cache_dir, exist_ok=True)
+    filename = f"bt_{strategy}_lambda{lambda_}_gamma{gamma}_{reference_rule}.pkl"
+    cache_path = os.path.join(cache_dir, filename)
+
+    # === Load from cache if exists ===
+    if os.path.exists(cache_path):
+        print(f"📂 Loading cached backtest from: {cache_path}")
+        with open(cache_path, "rb") as f:
+            return pkl.load(f)
+
+    # === Begin computation ===
+    dates = list(bma_returns.keys())
+    num_assets = bma_returns[dates[0]].shape[1]
+
+    portfolio_returns = []
+    compounded_returns = []
+    portfolio_weights = []
+    r_hat_values = []
+
+    cumulative_return = 1.0
+    r_tminus1 = 0.0
+    r_tminus2 = 0.0
+
+    for t, current_date in enumerate(dates[:-1]):
+        print(f"🔄 Backtesting {current_date.strftime('%Y-%m')}")
+
+        r_s = bma_returns[current_date]  # shape: (num_sim, num_assets)
+
+        # === Define r_hat based on reference rule ===
+        if reference_rule == "prev_portfolio":
+            r_hat = r_tminus1
+        elif reference_rule == "fixed_zero":
+            r_hat = 0.0
+        elif reference_rule == "market_return":
+            r_hat = market_returns.get(current_date, 0.0) if market_returns else 0.0
+        elif reference_rule == "rolling_avg":
+            r_hat = np.mean(portfolio_returns[-3:]) if len(portfolio_returns) >= 3 else 0.0
+        else:
+            raise ValueError(f"Unknown reference rule: {reference_rule}")
+
+        r_hat_values.append(r_hat)
+
+        # === Optimize ===
+        result = optimize_portfolio(
+            r_s=r_s,
+            r_hat=r_hat,
+            lambda_=lambda_,
+            strategy=strategy,
+            gamma=gamma,
+            r_tminus1=r_tminus1,
+            r_tminus2=r_tminus2,
+            BMA=True
+        )
+        weights = [round(w, 4) for w in result.x]
+        portfolio_weights.append(weights)
+
+        # === Next period returns ===
+        next_date = dates[t + 1]
+        next_r_s = bma_returns[next_date]
+        portfolio_return_simulated = np.dot(next_r_s, weights)
+        portfolio_return = np.mean(portfolio_return_simulated)
+
+        portfolio_returns.append(portfolio_return)
+        cumulative_return *= (1 + portfolio_return)
+        compounded_returns.append(cumulative_return)
+
+        r_tminus2 = r_tminus1
+        r_tminus1 = portfolio_return
+
+    # === Build result DataFrame ===
+    result_df = pd.DataFrame({
+        'Portfolio Returns': portfolio_returns,
+        'Compounded Returns': compounded_returns,
+        'Portfolio Weights': portfolio_weights,
+        'r_hat': r_hat_values
+    }, index=dates[1:])
+
+    # === Save to cache ===
+    with open(cache_path, "wb") as f:
+        pkl.dump(result_df, f)
+        print(f"✅ Saved backtest to: {cache_path}")
+
+    return result_df
+
+
+
+def resultgenerator_bma_dynamic_rhat(
+    lambda_values,
+    gamma_values,
+    bma_returns,
+    strategies,
+    date_tag: str,
+    cache_dir="backtest_caches/bma_cache",
+    reference_rule="prev_portfolio",
+    market_returns: dict = None
+) -> dict[str, pd.DataFrame]:
+    """
+    Runs backtests over a grid of (lambda, gamma, strategy) using BMA-simulated returns.
+    Uses internal caching and supports custom reference point definitions.
+
+    Returns:
+        results_dict: strategy_key → DataFrame of backtest results
+    """
+    results_dict = {}
+    os.makedirs(cache_dir, exist_ok=True)
+
+    for lambdas in lambda_values:
+        print(f"\nλ = {lambdas}")
+        for gammas in gamma_values:
+            print(f"  γ = {gammas}")
+            for strategy in strategies:
+                key = f"{strategy}_{lambdas}_{gammas}"
+                print(f"    Strategy: {key} — ref: {reference_rule}")
+
+                toc = time.time()
+
+                # Run backtest (automatically cached)
+                results = backtest_portfolio_bma(
+                    bma_returns=bma_returns,
+                    strategy=strategy,
+                    lambda_=lambdas,
+                    gamma=gammas,
+                    reference_rule=reference_rule,
+                    market_returns=market_returns,
+                    cache_dir=cache_dir
+                )
+
+                tic = time.time()
+                print(f"    → Completed in {(tic - toc):.2f}s")
+
+                results_dict[key] = results
+
+    return results_dict
+
+
+def parse_strategy_key(key: str) -> tuple:
+    strategy, lam, gamma = key.split("_")
+    return strategy, float(lam), float(gamma)
+
+def summarize_backtest_results(results_input) -> pd.DataFrame:
+    """
+    Summarizes backtest performance across strategies or a single strategy.
     
-    return aggressive_result_list, conservative_result_list
+    Args:
+        results_input (dict or pd.DataFrame): 
+            - dict: from resultgenerator_*(), where keys are strategy_lambda_gamma and values are DataFrames
+            - DataFrame: single naive strategy with 'Portfolio Returns' and 'Compounded Returns'
+
+    Returns:
+        pd.DataFrame with summary metrics per strategy/parameter combo
+    """
+    summary_rows = []
+
+    if isinstance(results_input, dict):
+        # Loop over strategy keys
+        for key, df in results_input.items():
+            returns = df['Portfolio Returns']
+            compounded = df['Compounded Returns']
+            
+
+            #print(returns)
+
+            mean_ret = returns.mean()
+            std_ret = returns.std(ddof=1)
+            sharpe = mean_ret / std_ret if std_ret > 0 else np.nan
+            final_wealth = compounded.iloc[-1]
+            min_wealth = compounded.min()
+            max_drawdown = 1 - (min_wealth / compounded.cummax()).min()
+            HHI = df['Portfolio Weights'].apply(lambda x: np.sum(np.square(x))).mean()
+
+            strategy, lam, gamma = parse_strategy_key(key)
+            df['Prospect Value'] = returns.apply(
+                lambda r: ev.prospect_theory_value(r,
+                                                reference=0.0017,
+                                                lambda_=lam,
+                                                gamma=gamma)
+            )
+            mean_prospect_value = df['Prospect Value'].mean()
+            sum_of_prospect_values = df['Prospect Value'].sum()
+
+            summary_rows.append({
+                'Strategy_Key': key,
+                'Strategy': strategy,
+                'Lambda': lam,
+                'Gamma': gamma,
+                'Mean Return': mean_ret,
+                'Std Dev': std_ret,
+                'Sharpe Ratio': sharpe,
+                'HHI': HHI,
+                'Final Wealth': final_wealth,
+                'Max Drawdown': max_drawdown,
+                "Prospect Value": mean_prospect_value,
+                "Sum of Prospect Values": sum_of_prospect_values
+            })
+    else:
+        # Single DataFrame, e.g., for naive equal-weight
+        df = results_input
+        returns = df['Portfolio Returns']
+        compounded = df['Compounded Returns']
+        
+
+        mean_ret = returns.mean()
+        
+        std_ret = returns.std(ddof=1)
+        sharpe = mean_ret / std_ret if std_ret > 0 else np.nan
+        final_wealth = compounded.iloc[-1]
+        min_wealth = compounded.min()
+        max_drawdown = 1 - (min_wealth / compounded.cummax()).min()
+        df['Prospect Value'] = returns.apply(
+                lambda r: ev.prospect_theory_value(r,
+                                                reference=0.0017,
+                                                lambda_=lam,
+                                                gamma=gamma)
+            )
+        mean_prospect_value = df['Prospect Value'].mean()
+        sum_of_prospect_values = df['Prospect Value'].sum()
+
+        summary_rows.append({
+            'Strategy_Key': "Naive Equal-Weight",
+            'Strategy': "naive",
+            'Lambda': None,
+            'Gamma': None,
+            'Mean Return': mean_ret,
+            'Std Dev': std_ret,
+            'Sharpe Ratio': sharpe,
+            'Final Wealth': final_wealth,
+            'Max Drawdown': max_drawdown,
+            "Prospect Value": mean_prospect_value,
+            "Sum of Prospect Values": sum_of_prospect_values
+        })
+
+    summary_df = pd.DataFrame(summary_rows).set_index('Strategy_Key')
+    return summary_df.sort_values(by='Sharpe Ratio', ascending=False)
+
+
+
+def compare_methods(results_by_method: dict[str, dict[str, pd.DataFrame]]) -> pd.DataFrame:
+    """
+    Compares multiple backtest methods across strategies.
+    
+    Args:
+        results_by_method: dictionary where 
+            key = method name (e.g., 'BMA', 'Historical Mean', 'Shrinkage')
+            value = corresponding results_dict (strategy_key -> DataFrame)
+
+    Returns:
+        pd.DataFrame: combined summary with Method labels
+    """
+    all_summaries = []
+
+    for method_name, results_dict in results_by_method.items():
+        summary = summarize_backtest_results(results_dict)
+        summary["Method"] = method_name
+        all_summaries.append(summary.reset_index())
+
+    # Combine all summaries
+    combined_summary = pd.concat(all_summaries)
+
+    # Optional: sort nicely
+    combined_summary = combined_summary.sort_values(by=["Strategy", "Lambda", "Gamma", "Method"]).set_index("Strategy_Key")
+
+    return combined_summary
+
+
+
+
+
+def evaluate_reference_robustness(
+    lambda_values,
+    gamma_values,
+    bma_returns,
+    strategies,
+    date_tag,
+    parent_dir,
+    reference_rules=("prev_portfolio", "fixed_zero", "market_return", "spy")
+) -> dict[str, dict[str, pd.DataFrame]]:
+    """
+    Evaluates backtests and CE across multiple reference point rules.
+
+    Returns:
+        dict: {reference_rule: results_dict}
+              where each results_dict is {strategy_key: result_df}
+    """
+    all_results_by_reference = {}
+
+    for ref_rule in reference_rules:
+        print(f"\n🧭 Evaluating reference: {ref_rule}")
+
+        # Load required reference series if applicable
+        if ref_rule in {"market_return", "spy"}:
+            market_returns = load_reference_returns(parent_dir, ref_type=ref_rule.split("_")[0])
+        else:
+            market_returns = None
+
+        results_dict = resultgenerator_bma(
+            lambda_values=lambda_values,
+            gamma_values=gamma_values,
+            bma_returns=bma_returns,
+            strategies=strategies,
+            date_tag=date_tag,
+            cache_dir="./bma_cache",
+            reference_rule=ref_rule,
+            market_returns=market_returns
+        )
+
+        all_results_by_reference[ref_rule] = results_dict
+
+    return all_results_by_reference
+
+
+
+
+
 
 
 
