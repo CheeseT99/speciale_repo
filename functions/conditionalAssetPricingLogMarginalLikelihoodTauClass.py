@@ -27,7 +27,7 @@ from CommonFunctions import constructAllCombinationsMatrix, retreiveRowFromAllCo
 from GammaFunctions import multigammalnNumba
 from ConditionalAssetPricingCommonFunction import calclogMarginalLikelihoods, findOtherFactors
 import tictoc
-import writeProfLatexTable as tex
+#import writeProfLatexTable as tex
 
 keyPrint        = False
 keyPrintResults = True

@@ -27,7 +27,7 @@ def load_historical_returns(parent_dir: str, start_date=None, end_date=None) -> 
         pd.DataFrame: [Date x Factors] monthly returns (as decimals)
     """
 
-    factors_path = os.path.join(parent_dir, "Complemetary Code Files for Submission", "Data", "factors-20.csv")
+    factors_path = os.path.join(parent_dir, "Functions", "Data", "factors-20.csv")
     factors = pd.read_csv(factors_path)
 
     # Parse date
@@ -64,7 +64,7 @@ def load_risk_free_rate_from_factors(
     Returns:
         pd.Series: Risk-free rate time series indexed by date
     """
-    file_path = os.path.join(parent_dir, "Complemetary Code Files for Submission", "Data", "factors-20.csv")
+    file_path = os.path.join(parent_dir, "functions", "Data", "factors-20.csv")
 
     # Load and parse
     df = pd.read_csv(file_path)
@@ -113,7 +113,7 @@ def load_reference_returns(parent_dir: str, ref_type: str = "market", start_date
         dict[pd.Timestamp, float]: reference returns (monthly)
     """
 
-    factors_path = os.path.join(parent_dir, "Complemetary Code Files for Submission", "Data", "factors-20.csv")
+    factors_path = os.path.join(parent_dir, "functions", "Data", "factors-20.csv")
     factors = pd.read_csv(factors_path)
 
     factors['Date'] = pd.to_datetime(factors['Date'].astype(str), format='%Y%m')
@@ -168,7 +168,7 @@ def load_test_assets_and_factors(
     """
     factors_path = os.path.join(
         parent_dir,
-        "Complemetary Code Files for Submission",
+        "functions",
         "Data",
         "factors-20.csv"
     )
@@ -207,7 +207,7 @@ def load_test_assets_and_factors(
 
 
 def load_market_benchmark(parent_dir: str, start_date=None, end_date=None) -> pd.Series:
-    factors_path = os.path.join(parent_dir, "Complemetary Code Files for Submission", "Data", "factors-20.csv")
+    factors_path = os.path.join(parent_dir, "functions", "Data", "factors-20.csv")
     
     factors = pd.read_csv(factors_path)
     factors['Date'] = pd.to_datetime(factors['Date'].astype(str), format='%Y%m')
@@ -481,8 +481,8 @@ def rolling_bma_returns(parent_dir, n_predictors_to_use, start_date, end_date, m
     - Store 10,000 simulated draws in an OrderedDict indexed by date
     """
     # --- Load data ---
-    factors_path = os.path.join(parent_dir, "Complemetary Code Files for Submission", "Data", "factors-20.csv")
-    predictors_path = os.path.join(parent_dir, "Complemetary Code Files for Submission", "Data", "Z - 197706.csv")
+    factors_path = os.path.join(parent_dir, "functions", "Data", "factors-20.csv")
+    predictors_path = os.path.join(parent_dir, "functions", "Data", "Z - 197706.csv")
 
     factors = pd.read_csv(factors_path).drop(columns=['MKTRF', 'SMB*', 'CON', 'IA', 'ROE', 'ME','HML','RMW','BAB','MMOM', 'FIN','MKT'], errors='ignore')
     #factors = pd.read_csv(factors_path).iloc[:, :10]
